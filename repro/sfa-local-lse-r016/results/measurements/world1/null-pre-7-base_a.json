@@ -1,0 +1,141 @@
+{
+  "arm": "base",
+  "block": 3,
+  "block_max_ns": 490692.6313868613,
+  "block_median_ns": 476359.68613138684,
+  "block_min_ns": 439800.76155717764,
+  "correctness": {
+    "finite_positive_statistics": true,
+    "maximum_sha256": "7b596670b8161a8fd719fa0cbe0ec6cb0100427690d465c4741e6e26bfe9547a",
+    "oracle": {
+      "lse_max_abs_fp32_error": 4.76837158203125e-07,
+      "output_max_abs_fp32_error": 0.00390625,
+      "reference_lse_sha256": "514bd183272d9e3cba0e7edfad3656489140bede1e2fe535df4a0f1230118e4b",
+      "status": "PASS_R014_INDEPENDENT_FP32_ORACLE"
+    },
+    "packed_dtype": "torch.bfloat16",
+    "packed_sha256": "1a4b57be2fb8297e0377792ee787def918406b8d25b5cd707f8773c827faad82",
+    "packed_shape": [
+      2,
+      2,
+      8,
+      516
+    ],
+    "producer_output_sha256": "a66768a30ed1bb4fe856ba56dcf46ba2d89c0fb5a802c10e6fdd4469e409f378",
+    "summation_sha256": "21f6705e166a117753199927d8808d86ea3ecb5539d16c69a08fdee98ca55f23"
+  },
+  "fixture_file": {
+    "bytes": 7514,
+    "path": "inputs/fixture.bin",
+    "sha256": "63785fa8f4592b7f8f9e06d345a20cf29a4ac8d19adc1e89dc8f90e60eb7db19"
+  },
+  "imported_modules": {
+    "device_op": {
+      "path": "<base-env>/vllm_ascend/device/device_op.py",
+      "sha256": "c64dc4f693da5c537315fb66c9dd121b16be4ef9a7eaaae45390d1871760ba1d"
+    },
+    "sfa_ops": {
+      "path": "<base-env>/vllm_ascend/ops/triton/sfa_cp.py",
+      "sha256": "c5d5a2b4d516a81b53effa88ee4ba861800dd833a6a085908609e6b757e1fcef"
+    },
+    "vllm_ascend": {
+      "path": "<base-env>/vllm_ascend/__init__.py",
+      "sha256": "404b7f5dd6b999346b61bef659ea30571a36b94d6cabc633e39a355850d82fd3"
+    }
+  },
+  "iterations": 822,
+  "logical_arm": "base_a",
+  "mode": "measure",
+  "path": "world1",
+  "producer_fixture": {
+    "dtype": "torch.bfloat16",
+    "seed": 20260913,
+    "shape": {
+      "head_dim": 512,
+      "heads": 8,
+      "rope_dim": 64,
+      "seq_len": 128,
+      "sparse_count": 2048,
+      "tokens": 4
+    },
+    "tensor_sha256": {
+      "actual_k": "50c8ba3a6170f0a2fb6736ece8a603576ef6309a35e810911599bc6211b554a9",
+      "actual_q": "fb5e512425fc9449316ec95969ebe71e2d576dbab833d61e2a5b9330fd70ee02",
+      "block_table": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+      "indices": "6962e0c43caba346dac380718e73188c7a52ad1030bca36cd8fc6accd3fef579",
+      "k": "f18e701635a0bb29e8c0a93b57edc06118bebfc0f44974c89e1d987e7ebf56e5",
+      "k_rope": "27006179608acdcdeacb0c6a0fa47f981c972a38e5885a9f35cdd19f04a69485",
+      "q": "ff3270c5cb541f89bd119654597c035eb1a0ddc8cd3b86a5a275fe4c2b6c8602",
+      "q_rope": "1aab488115d10072661e622e54b04ae1f55ec7cd39225e17789421c184597667"
+    }
+  },
+  "recorded_at": "2026-09-02T02:29:43.935324+00:00",
+  "runtime": {
+    "cann": "/usr/local/Ascend/cann-9.0.1",
+    "platform": "Linux-5.15.0-91-generic-aarch64-with-glibc2.35",
+    "python": "3.12.13 (main, Jul  7 2026, 16:29:36) [GCC 11.4.0]",
+    "torch": "2.10.0+cpu",
+    "torch_npu": "2.10.0.post2",
+    "triton_cache": "<base-cache>",
+    "visible_devices": "0,1"
+  },
+  "samples": [
+    {
+      "elapsed_ns": 361516226,
+      "iterations": 822,
+      "last_output_sha256": "1a4b57be2fb8297e0377792ee787def918406b8d25b5cd707f8773c827faad82",
+      "per_iteration_ns": 439800.76155717764,
+      "started_at": "2026-09-02T02:29:45.581150+00:00"
+    },
+    {
+      "elapsed_ns": 361904219,
+      "iterations": 822,
+      "last_output_sha256": "1a4b57be2fb8297e0377792ee787def918406b8d25b5cd707f8773c827faad82",
+      "per_iteration_ns": 440272.7725060827,
+      "started_at": "2026-09-02T02:29:45.944049+00:00"
+    },
+    {
+      "elapsed_ns": 391567662,
+      "iterations": 822,
+      "last_output_sha256": "1a4b57be2fb8297e0377792ee787def918406b8d25b5cd707f8773c827faad82",
+      "per_iteration_ns": 476359.68613138684,
+      "started_at": "2026-09-02T02:29:46.308106+00:00"
+    },
+    {
+      "elapsed_ns": 403349343,
+      "iterations": 822,
+      "last_output_sha256": "1a4b57be2fb8297e0377792ee787def918406b8d25b5cd707f8773c827faad82",
+      "per_iteration_ns": 490692.6313868613,
+      "started_at": "2026-09-02T02:29:46.700077+00:00"
+    },
+    {
+      "elapsed_ns": 396151662,
+      "iterations": 822,
+      "last_output_sha256": "1a4b57be2fb8297e0377792ee787def918406b8d25b5cd707f8773c827faad82",
+      "per_iteration_ns": 481936.3284671533,
+      "started_at": "2026-09-02T02:29:47.103810+00:00"
+    }
+  ],
+  "schema": {
+    "Meta": true,
+    "PrivateUse1": true,
+    "name": "vllm::sfa_dcp_a2a_fused",
+    "schema": "vllm::sfa_dcp_a2a_fused(Tensor sfa_output, Tensor softmax_lse, SymInt dcp_size, SymInt scatter_dim, str group_name) -> Tensor"
+  },
+  "source": {
+    "context": {
+      "path": "run/source/base/vllm_ascend/attention/context_parallel/sfa_cp.py",
+      "sha256": "17d80412c16270ac0da8a188bdd6d6b7d8b108fbbf92752a6ddf965898085e57"
+    },
+    "pack": {
+      "path": "run/source/base/vllm_ascend/ops/triton/sfa_cp.py",
+      "sha256": "c5d5a2b4d516a81b53effa88ee4ba861800dd833a6a085908609e6b757e1fcef"
+    },
+    "producer": {
+      "path": "run/source/base/vllm_ascend/device/device_op.py",
+      "sha256": "c64dc4f693da5c537315fb66c9dd121b16be4ef9a7eaaae45390d1871760ba1d"
+    }
+  },
+  "status": "PASS_MEASUREMENT_BLOCK",
+  "warmup_iterations": 10
+}

@@ -1,0 +1,38 @@
+{
+  "primary": {
+    "base_median_ns": 310342.0131826742,
+    "candidate_median_ns": 242750.24105461393,
+    "decision_threshold": 0.08473031266058662,
+    "favor_candidate": 8,
+    "median_pair_abs_relative": 0.04236515633029331,
+    "noise_floor": 0.04236515633029331,
+    "paired_median_improvement": 0.2165502300220319,
+    "positive": true,
+    "pre_post_drift": 0.02767993718471813,
+    "total_pairs": 8
+  },
+  "two-rank": {
+    "base_median_ns": 5043063.320652174,
+    "candidate_median_ns": 5067636.5869565215,
+    "decision_threshold": 0.08819284443698222,
+    "favor_candidate": 4,
+    "median_pair_abs_relative": 0.04409642221849111,
+    "noise_floor": 0.04409642221849111,
+    "paired_median_improvement": 0.003848528575462456,
+    "positive": false,
+    "pre_post_drift": 0.0023538924760272274,
+    "total_pairs": 8
+  },
+  "world1": {
+    "base_median_ns": 435846.3704379562,
+    "candidate_median_ns": 375199.3600973236,
+    "decision_threshold": 0.11693828979264087,
+    "favor_candidate": 8,
+    "median_pair_abs_relative": 0.014221265012193425,
+    "noise_floor": 0.058469144896320435,
+    "paired_median_improvement": 0.12944674473390172,
+    "positive": true,
+    "pre_post_drift": 0.058469144896320435,
+    "total_pairs": 8
+  }
+}

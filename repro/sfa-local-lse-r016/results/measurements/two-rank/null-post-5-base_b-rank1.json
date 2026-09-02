@@ -1,0 +1,106 @@
+{
+  "arm": "base",
+  "block": 2,
+  "block_max_ns": 5126206.771739131,
+  "block_median_ns": 5036943.184782608,
+  "block_min_ns": 5001020.054347826,
+  "fixture_file": {
+    "bytes": 7514,
+    "path": "inputs/fixture.bin",
+    "sha256": "63785fa8f4592b7f8f9e06d345a20cf29a4ac8d19adc1e89dc8f90e60eb7db19"
+  },
+  "group": {
+    "backend": "hccl",
+    "name": "sfa-r016-hccl:0",
+    "rank": 1,
+    "world_size": 2
+  },
+  "imported_modules": {
+    "context": {
+      "path": "<base-env>/vllm_ascend/attention/context_parallel/sfa_cp.py",
+      "sha256": "17d80412c16270ac0da8a188bdd6d6b7d8b108fbbf92752a6ddf965898085e57"
+    },
+    "device_op": {
+      "path": "<base-env>/vllm_ascend/device/device_op.py",
+      "sha256": "c64dc4f693da5c537315fb66c9dd121b16be4ef9a7eaaae45390d1871760ba1d"
+    },
+    "vllm_ascend": {
+      "path": "<base-env>/vllm_ascend/__init__.py",
+      "sha256": "404b7f5dd6b999346b61bef659ea30571a36b94d6cabc633e39a355850d82fd3"
+    }
+  },
+  "iterations": 92,
+  "local_rank": 1,
+  "logical_arm": "base_b",
+  "mode": "measure",
+  "path": "two_rank",
+  "rank": 1,
+  "recorded_at": "2026-09-02T03:03:35.868025+00:00",
+  "runtime": {
+    "cann": "/usr/local/Ascend/cann-9.0.1",
+    "python": "3.12.13 (main, Jul  7 2026, 16:29:36) [GCC 11.4.0]",
+    "torch": "2.10.0+cpu",
+    "torch_npu": "2.10.0.post2",
+    "triton_cache": "<base-cache>/two-rank/rank1",
+    "visible_devices": "0,1"
+  },
+  "samples": [
+    {
+      "critical_path_elapsed_ns": 471611023,
+      "iterations": 92,
+      "last_output_sha256": "7e00efa74131c16849801b5f57aba386cf977d5c6c51712f12978afb9aab6858",
+      "local_elapsed_ns": 471611023,
+      "per_iteration_ns": 5126206.771739131,
+      "started_at": "2026-09-02T03:03:35.870280+00:00"
+    },
+    {
+      "critical_path_elapsed_ns": 466488899,
+      "iterations": 92,
+      "last_output_sha256": "7e00efa74131c16849801b5f57aba386cf977d5c6c51712f12978afb9aab6858",
+      "local_elapsed_ns": 466488899,
+      "per_iteration_ns": 5070531.510869565,
+      "started_at": "2026-09-02T03:03:36.346641+00:00"
+    },
+    {
+      "critical_path_elapsed_ns": 463398773,
+      "iterations": 92,
+      "last_output_sha256": "7e00efa74131c16849801b5f57aba386cf977d5c6c51712f12978afb9aab6858",
+      "local_elapsed_ns": 463398773,
+      "per_iteration_ns": 5036943.184782608,
+      "started_at": "2026-09-02T03:03:36.814549+00:00"
+    },
+    {
+      "critical_path_elapsed_ns": 460093845,
+      "iterations": 92,
+      "last_output_sha256": "7e00efa74131c16849801b5f57aba386cf977d5c6c51712f12978afb9aab6858",
+      "local_elapsed_ns": 460093845,
+      "per_iteration_ns": 5001020.054347826,
+      "started_at": "2026-09-02T03:03:37.279291+00:00"
+    },
+    {
+      "critical_path_elapsed_ns": 462136892,
+      "iterations": 92,
+      "last_output_sha256": "7e00efa74131c16849801b5f57aba386cf977d5c6c51712f12978afb9aab6858",
+      "local_elapsed_ns": 462136892,
+      "per_iteration_ns": 5023227.0869565215,
+      "started_at": "2026-09-02T03:03:37.740726+00:00"
+    }
+  ],
+  "schema": "sfa-r016-two-rank-arm-v1",
+  "source": {
+    "context": {
+      "path": "run/source/base/vllm_ascend/attention/context_parallel/sfa_cp.py",
+      "sha256": "17d80412c16270ac0da8a188bdd6d6b7d8b108fbbf92752a6ddf965898085e57"
+    },
+    "pack": {
+      "path": "run/source/base/vllm_ascend/ops/triton/sfa_cp.py",
+      "sha256": "c5d5a2b4d516a81b53effa88ee4ba861800dd833a6a085908609e6b757e1fcef"
+    },
+    "producer": {
+      "path": "run/source/base/vllm_ascend/device/device_op.py",
+      "sha256": "c64dc4f693da5c537315fb66c9dd121b16be4ef9a7eaaae45390d1871760ba1d"
+    }
+  },
+  "status": "PASS_MEASUREMENT_BLOCK",
+  "warmup_iterations": 10
+}

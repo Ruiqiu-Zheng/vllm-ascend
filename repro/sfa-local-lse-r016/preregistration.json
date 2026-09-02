@@ -1,0 +1,107 @@
+{
+  "calibration_max_iterations": 65536,
+  "calibration_target_block_ms": 250,
+  "candidate_id": "SFA-LSE-R013-C01-BA07",
+  "correctness_sentinel_cells": {
+    "exact_fixture": [
+      "bfloat16-scatter0",
+      "bfloat16-scatter1",
+      "float16-scatter0",
+      "float16-scatter1"
+    ],
+    "producer": [
+      "bfloat16-scatter0",
+      "bfloat16-scatter1",
+      "float16-scatter0",
+      "float16-scatter1"
+    ]
+  },
+  "devices": [
+    0,
+    1
+  ],
+  "host": "recorded-test-host",
+  "null_pair_order": [
+    [
+      "base_a",
+      "base_b"
+    ],
+    [
+      "base_b",
+      "base_a"
+    ],
+    [
+      "base_b",
+      "base_a"
+    ],
+    [
+      "base_a",
+      "base_b"
+    ]
+  ],
+  "pair_order": [
+    [
+      "base",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "base"
+    ],
+    [
+      "candidate",
+      "base"
+    ],
+    [
+      "base",
+      "candidate"
+    ],
+    [
+      "base",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "base"
+    ],
+    [
+      "candidate",
+      "base"
+    ],
+    [
+      "base",
+      "candidate"
+    ]
+  ],
+  "paired_blocks": 8,
+  "paths": [
+    "mechanism_local_max_sum_to_pack",
+    "world_size_one_pa_bsnd_producer_to_pack",
+    "same_host_two_rank_producer_to_custom_op"
+  ],
+  "post_hoc_samples_forbidden": true,
+  "primary_negative_rule": "candidate median regression exceeds max(1 percent, 2 * relative_noise_floor)",
+  "primary_positive_rule": "at least 75 percent of paired blocks favor candidate and median improvement exceeds max(1 percent, 2 * relative_noise_floor)",
+  "profiler": "not planned; only allowed after unexplained scheduling/completion ambiguity",
+  "relative_noise_floor": "maximum of absolute pre/post base median drift and median paired base/base absolute relative delta",
+  "samples_per_arm_block": 5,
+  "schema": "sfa-r016-preregistered-protocol-v1",
+  "secondary_rule": "primary-positive plus two-rank regression beyond its noise boundary is MIXED_LOCAL_GAIN_SECONDARY_REGRESSION",
+  "seed": 20260916,
+  "single_run": true,
+  "synchronization": "torch.npu.synchronize before and after every timed sample; HCCL barrier before and after two-rank samples; two-rank elapsed is max(rank elapsed)",
+  "task_id": "R016",
+  "timed_cell": {
+    "dcp_size": 2,
+    "dtype": "bfloat16",
+    "head_dim": 512,
+    "producer_seed": 20260913,
+    "producer_shape": [
+      4,
+      8,
+      512
+    ],
+    "scatter_dim": 0
+  },
+  "warmup_iterations": 10
+}

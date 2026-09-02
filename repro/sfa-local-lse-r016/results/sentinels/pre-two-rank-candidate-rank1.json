@@ -1,0 +1,249 @@
+{
+  "arm": "candidate",
+  "block": -1,
+  "exact_fixture_cells": [
+    {
+      "actual_sha256": "f7456812a22f516fe7fd90e5297214ace1ce1405c683da309968d4c5ba894a18",
+      "dtype": "bfloat16",
+      "max_abs_fp32_error": 0.0,
+      "reference_sha256": "f7456812a22f516fe7fd90e5297214ace1ce1405c683da309968d4c5ba894a18",
+      "scatter_dim": 0,
+      "status": "PASS_R014_INDEPENDENT_MERGE",
+      "tolerance": 0.02
+    },
+    {
+      "actual_sha256": "50df2b0400e1a941b49e264be234214b890091fb7e7e0bfb001aaa513391bb9c",
+      "dtype": "bfloat16",
+      "max_abs_fp32_error": 0.0,
+      "reference_sha256": "50df2b0400e1a941b49e264be234214b890091fb7e7e0bfb001aaa513391bb9c",
+      "scatter_dim": 1,
+      "status": "PASS_R014_INDEPENDENT_MERGE",
+      "tolerance": 0.02
+    },
+    {
+      "actual_sha256": "658c94fc61e38e6b262ef8a007e906e8bc27b8667f2a16e46ca2b74d73d512ba",
+      "dtype": "float16",
+      "max_abs_fp32_error": 0.0,
+      "reference_sha256": "658c94fc61e38e6b262ef8a007e906e8bc27b8667f2a16e46ca2b74d73d512ba",
+      "scatter_dim": 0,
+      "status": "PASS_R014_INDEPENDENT_MERGE",
+      "tolerance": 0.01
+    },
+    {
+      "actual_sha256": "59383264f7f97a977e87f8824a21a9a5ba3a1a0624abc560467f920ce1ca1921",
+      "dtype": "float16",
+      "max_abs_fp32_error": 0.0,
+      "reference_sha256": "59383264f7f97a977e87f8824a21a9a5ba3a1a0624abc560467f920ce1ca1921",
+      "scatter_dim": 1,
+      "status": "PASS_R014_INDEPENDENT_MERGE",
+      "tolerance": 0.01
+    }
+  ],
+  "fixture_file": {
+    "bytes": 7514,
+    "path": "inputs/fixture.bin",
+    "sha256": "63785fa8f4592b7f8f9e06d345a20cf29a4ac8d19adc1e89dc8f90e60eb7db19"
+  },
+  "group": {
+    "backend": "hccl",
+    "name": "sfa-r016-hccl:0",
+    "rank": 1,
+    "world_size": 2
+  },
+  "imported_modules": {
+    "context": {
+      "path": "<candidate-env>/vllm_ascend/attention/context_parallel/sfa_cp.py",
+      "sha256": "015e2bd76fe5910736c32ae46ef8bfe08c5589f467560515112b58e28f125795"
+    },
+    "device_op": {
+      "path": "<candidate-env>/vllm_ascend/device/device_op.py",
+      "sha256": "c64dc4f693da5c537315fb66c9dd121b16be4ef9a7eaaae45390d1871760ba1d"
+    },
+    "vllm_ascend": {
+      "path": "<candidate-env>/vllm_ascend/__init__.py",
+      "sha256": "404b7f5dd6b999346b61bef659ea30571a36b94d6cabc633e39a355850d82fd3"
+    }
+  },
+  "local_rank": 1,
+  "logical_arm": "candidate",
+  "mode": "sentinel",
+  "path": "two_rank",
+  "producer_cells": [
+    {
+      "actual_sha256": "7e00efa74131c16849801b5f57aba386cf977d5c6c51712f12978afb9aab6858",
+      "dtype": "torch.bfloat16",
+      "max_abs_fp32_error": 0.0,
+      "producer": {
+        "finite_max": true,
+        "finite_positive_sum": true,
+        "lse_max_abs_fp32_oracle_error": 4.76837158203125e-07,
+        "max_dtype": "torch.float32",
+        "max_sha256": "87f1234ace6360161610ef81d3b49068132589d979419ee76248b1b1905d1470",
+        "max_shape": [
+          1,
+          4,
+          8
+        ],
+        "output_dtype": "torch.bfloat16",
+        "output_max_abs_fp32_oracle_error": 0.00390625,
+        "output_sha256": "a8565d861091ad4760edfa487c05ff948bffa7a3943ef005c6b40b358194ff3c",
+        "output_shape": [
+          4,
+          8,
+          512
+        ],
+        "sum_dtype": "torch.float32",
+        "sum_sha256": "a39a8482a2ea1da096714ddc28cd08494cb156833a55f0b7992cdfa96cdf7ebd",
+        "sum_shape": [
+          1,
+          4,
+          8
+        ],
+        "tuple_arity": 3
+      },
+      "reference_sha256": "7e00efa74131c16849801b5f57aba386cf977d5c6c51712f12978afb9aab6858",
+      "scatter_dim": 0,
+      "status": "PASS_R014_PRODUCER_AND_MERGE_ORACLE",
+      "tolerance": 0.02
+    },
+    {
+      "actual_sha256": "d81a5928ee3863618ed921a9b638417c305cb4ce8fc6487a28b4ef3b1de860c5",
+      "dtype": "torch.bfloat16",
+      "max_abs_fp32_error": 0.0,
+      "producer": {
+        "finite_max": true,
+        "finite_positive_sum": true,
+        "lse_max_abs_fp32_oracle_error": 4.76837158203125e-07,
+        "max_dtype": "torch.float32",
+        "max_sha256": "87f1234ace6360161610ef81d3b49068132589d979419ee76248b1b1905d1470",
+        "max_shape": [
+          1,
+          4,
+          8
+        ],
+        "output_dtype": "torch.bfloat16",
+        "output_max_abs_fp32_oracle_error": 0.00390625,
+        "output_sha256": "a8565d861091ad4760edfa487c05ff948bffa7a3943ef005c6b40b358194ff3c",
+        "output_shape": [
+          4,
+          8,
+          512
+        ],
+        "sum_dtype": "torch.float32",
+        "sum_sha256": "a39a8482a2ea1da096714ddc28cd08494cb156833a55f0b7992cdfa96cdf7ebd",
+        "sum_shape": [
+          1,
+          4,
+          8
+        ],
+        "tuple_arity": 3
+      },
+      "reference_sha256": "d81a5928ee3863618ed921a9b638417c305cb4ce8fc6487a28b4ef3b1de860c5",
+      "scatter_dim": 1,
+      "status": "PASS_R014_PRODUCER_AND_MERGE_ORACLE",
+      "tolerance": 0.02
+    },
+    {
+      "actual_sha256": "8e5018e4bdab15c837b4a7e3ec3d4eba63aeff49e7ae81b0285f84f1e0a38844",
+      "dtype": "torch.float16",
+      "max_abs_fp32_error": 0.0,
+      "producer": {
+        "finite_max": true,
+        "finite_positive_sum": true,
+        "lse_max_abs_fp32_oracle_error": 4.76837158203125e-07,
+        "max_dtype": "torch.float32",
+        "max_sha256": "6139b382903a09e07db1b47e0f9ea347e95eda7a94692571b98988bcea49e992",
+        "max_shape": [
+          1,
+          4,
+          8
+        ],
+        "output_dtype": "torch.float16",
+        "output_max_abs_fp32_oracle_error": 0.000244140625,
+        "output_sha256": "6390430f82e760daea35941bf2ec236dc4615aaa951e781ef5d7448b717f6806",
+        "output_shape": [
+          4,
+          8,
+          512
+        ],
+        "sum_dtype": "torch.float32",
+        "sum_sha256": "691b5f3635feaffa5496075223bc95b5812638bf27c01dffc38aaac4cea28f3f",
+        "sum_shape": [
+          1,
+          4,
+          8
+        ],
+        "tuple_arity": 3
+      },
+      "reference_sha256": "8e5018e4bdab15c837b4a7e3ec3d4eba63aeff49e7ae81b0285f84f1e0a38844",
+      "scatter_dim": 0,
+      "status": "PASS_R014_PRODUCER_AND_MERGE_ORACLE",
+      "tolerance": 0.01
+    },
+    {
+      "actual_sha256": "f3005c267f1d2646701bb30fb9fe9481ee27538d6fd9f373ea390ad6b79e15fb",
+      "dtype": "torch.float16",
+      "max_abs_fp32_error": 0.0,
+      "producer": {
+        "finite_max": true,
+        "finite_positive_sum": true,
+        "lse_max_abs_fp32_oracle_error": 4.76837158203125e-07,
+        "max_dtype": "torch.float32",
+        "max_sha256": "6139b382903a09e07db1b47e0f9ea347e95eda7a94692571b98988bcea49e992",
+        "max_shape": [
+          1,
+          4,
+          8
+        ],
+        "output_dtype": "torch.float16",
+        "output_max_abs_fp32_oracle_error": 0.000244140625,
+        "output_sha256": "6390430f82e760daea35941bf2ec236dc4615aaa951e781ef5d7448b717f6806",
+        "output_shape": [
+          4,
+          8,
+          512
+        ],
+        "sum_dtype": "torch.float32",
+        "sum_sha256": "691b5f3635feaffa5496075223bc95b5812638bf27c01dffc38aaac4cea28f3f",
+        "sum_shape": [
+          1,
+          4,
+          8
+        ],
+        "tuple_arity": 3
+      },
+      "reference_sha256": "f3005c267f1d2646701bb30fb9fe9481ee27538d6fd9f373ea390ad6b79e15fb",
+      "scatter_dim": 1,
+      "status": "PASS_R014_PRODUCER_AND_MERGE_ORACLE",
+      "tolerance": 0.01
+    }
+  ],
+  "rank": 1,
+  "recorded_at": "2026-09-02T02:05:18.877038+00:00",
+  "runtime": {
+    "cann": "/usr/local/Ascend/cann-9.0.1",
+    "python": "3.12.13 (main, Jul  7 2026, 16:29:36) [GCC 11.4.0]",
+    "torch": "2.10.0+cpu",
+    "torch_npu": "2.10.0.post2",
+    "triton_cache": "<candidate-cache>/two-rank/rank1",
+    "visible_devices": "0,1"
+  },
+  "samples": [],
+  "schema": "sfa-r016-two-rank-arm-v1",
+  "source": {
+    "context": {
+      "path": "run/source/candidate-archive/candidate-bundle/vllm-ascend/vllm_ascend/attention/context_parallel/sfa_cp.py",
+      "sha256": "015e2bd76fe5910736c32ae46ef8bfe08c5589f467560515112b58e28f125795"
+    },
+    "pack": {
+      "path": "run/source/candidate-archive/candidate-bundle/vllm-ascend/vllm_ascend/ops/triton/sfa_cp.py",
+      "sha256": "9124bea2df152af8e3114dd42b6ffebee9dfb0223c9e1839d3f280f6eacb8eb9"
+    },
+    "producer": {
+      "path": "run/source/candidate-archive/candidate-bundle/vllm-ascend/vllm_ascend/device/device_op.py",
+      "sha256": "c64dc4f693da5c537315fb66c9dd121b16be4ef9a7eaaae45390d1871760ba1d"
+    }
+  },
+  "status": "PASS_SENTINEL",
+  "warmup_iterations": 10
+}

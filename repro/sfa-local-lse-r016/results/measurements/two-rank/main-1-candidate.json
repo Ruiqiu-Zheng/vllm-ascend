@@ -1,0 +1,276 @@
+{
+  "arm": "candidate",
+  "block": 0,
+  "block_median_ns": 5061551.945652174,
+  "logical_arm": "candidate",
+  "mode": "measure",
+  "ranks": [
+    {
+      "path": "output/measurements/two-rank/main-1-candidate-rank0.json",
+      "rank": 0,
+      "result": {
+        "arm": "candidate",
+        "block": 0,
+        "block_max_ns": 5104452.630434782,
+        "block_median_ns": 5061551.945652174,
+        "block_min_ns": 4965922.119565218,
+        "fixture_file": {
+          "bytes": 7514,
+          "path": "inputs/fixture.bin",
+          "sha256": "63785fa8f4592b7f8f9e06d345a20cf29a4ac8d19adc1e89dc8f90e60eb7db19"
+        },
+        "group": {
+          "backend": "hccl",
+          "name": "sfa-r016-hccl:0",
+          "rank": 0,
+          "world_size": 2
+        },
+        "imported_modules": {
+          "context": {
+            "path": "<candidate-env>/vllm_ascend/attention/context_parallel/sfa_cp.py",
+            "sha256": "015e2bd76fe5910736c32ae46ef8bfe08c5589f467560515112b58e28f125795"
+          },
+          "device_op": {
+            "path": "<candidate-env>/vllm_ascend/device/device_op.py",
+            "sha256": "c64dc4f693da5c537315fb66c9dd121b16be4ef9a7eaaae45390d1871760ba1d"
+          },
+          "vllm_ascend": {
+            "path": "<candidate-env>/vllm_ascend/__init__.py",
+            "sha256": "404b7f5dd6b999346b61bef659ea30571a36b94d6cabc633e39a355850d82fd3"
+          }
+        },
+        "iterations": 92,
+        "local_rank": 0,
+        "logical_arm": "candidate",
+        "mode": "measure",
+        "path": "two_rank",
+        "rank": 0,
+        "recorded_at": "2026-09-02T02:49:06.995726+00:00",
+        "runtime": {
+          "cann": "/usr/local/Ascend/cann-9.0.1",
+          "python": "3.12.13 (main, Jul  7 2026, 16:29:36) [GCC 11.4.0]",
+          "torch": "2.10.0+cpu",
+          "torch_npu": "2.10.0.post2",
+          "triton_cache": "<candidate-cache>/two-rank/rank0",
+          "visible_devices": "0,1"
+        },
+        "samples": [
+          {
+            "critical_path_elapsed_ns": 469609642,
+            "iterations": 92,
+            "last_output_sha256": "83334fa8cb3211d8786b3eb3eb266ef784a9a28f2ee1f98245689ba932c19807",
+            "local_elapsed_ns": 469383830,
+            "per_iteration_ns": 5104452.630434782,
+            "started_at": "2026-09-02T02:49:06.997894+00:00"
+          },
+          {
+            "critical_path_elapsed_ns": 465662779,
+            "iterations": 92,
+            "last_output_sha256": "83334fa8cb3211d8786b3eb3eb266ef784a9a28f2ee1f98245689ba932c19807",
+            "local_elapsed_ns": 465405156,
+            "per_iteration_ns": 5061551.945652174,
+            "started_at": "2026-09-02T02:49:07.472444+00:00"
+          },
+          {
+            "critical_path_elapsed_ns": 462742155,
+            "iterations": 92,
+            "last_output_sha256": "83334fa8cb3211d8786b3eb3eb266ef784a9a28f2ee1f98245689ba932c19807",
+            "local_elapsed_ns": 462518443,
+            "per_iteration_ns": 5029806.032608695,
+            "started_at": "2026-09-02T02:49:07.939537+00:00"
+          },
+          {
+            "critical_path_elapsed_ns": 465888141,
+            "iterations": 92,
+            "last_output_sha256": "83334fa8cb3211d8786b3eb3eb266ef784a9a28f2ee1f98245689ba932c19807",
+            "local_elapsed_ns": 465713219,
+            "per_iteration_ns": 5064001.532608695,
+            "started_at": "2026-09-02T02:49:08.403728+00:00"
+          },
+          {
+            "critical_path_elapsed_ns": 456864835,
+            "iterations": 92,
+            "last_output_sha256": "83334fa8cb3211d8786b3eb3eb266ef784a9a28f2ee1f98245689ba932c19807",
+            "local_elapsed_ns": 456833974,
+            "per_iteration_ns": 4965922.119565218,
+            "started_at": "2026-09-02T02:49:08.871091+00:00"
+          }
+        ],
+        "schema": "sfa-r016-two-rank-arm-v1",
+        "source": {
+          "context": {
+            "path": "run/source/candidate-archive/candidate-bundle/vllm-ascend/vllm_ascend/attention/context_parallel/sfa_cp.py",
+            "sha256": "015e2bd76fe5910736c32ae46ef8bfe08c5589f467560515112b58e28f125795"
+          },
+          "pack": {
+            "path": "run/source/candidate-archive/candidate-bundle/vllm-ascend/vllm_ascend/ops/triton/sfa_cp.py",
+            "sha256": "9124bea2df152af8e3114dd42b6ffebee9dfb0223c9e1839d3f280f6eacb8eb9"
+          },
+          "producer": {
+            "path": "run/source/candidate-archive/candidate-bundle/vllm-ascend/vllm_ascend/device/device_op.py",
+            "sha256": "c64dc4f693da5c537315fb66c9dd121b16be4ef9a7eaaae45390d1871760ba1d"
+          }
+        },
+        "status": "PASS_MEASUREMENT_BLOCK",
+        "warmup_iterations": 10
+      },
+      "sha256": "5bd58b27d77f23912135f01eb9db5264e5efa2b3745d0169f8062b39558354bc"
+    },
+    {
+      "path": "output/measurements/two-rank/main-1-candidate-rank1.json",
+      "rank": 1,
+      "result": {
+        "arm": "candidate",
+        "block": 0,
+        "block_max_ns": 5104452.630434782,
+        "block_median_ns": 5061551.945652174,
+        "block_min_ns": 4965922.119565218,
+        "fixture_file": {
+          "bytes": 7514,
+          "path": "inputs/fixture.bin",
+          "sha256": "63785fa8f4592b7f8f9e06d345a20cf29a4ac8d19adc1e89dc8f90e60eb7db19"
+        },
+        "group": {
+          "backend": "hccl",
+          "name": "sfa-r016-hccl:0",
+          "rank": 1,
+          "world_size": 2
+        },
+        "imported_modules": {
+          "context": {
+            "path": "<candidate-env>/vllm_ascend/attention/context_parallel/sfa_cp.py",
+            "sha256": "015e2bd76fe5910736c32ae46ef8bfe08c5589f467560515112b58e28f125795"
+          },
+          "device_op": {
+            "path": "<candidate-env>/vllm_ascend/device/device_op.py",
+            "sha256": "c64dc4f693da5c537315fb66c9dd121b16be4ef9a7eaaae45390d1871760ba1d"
+          },
+          "vllm_ascend": {
+            "path": "<candidate-env>/vllm_ascend/__init__.py",
+            "sha256": "404b7f5dd6b999346b61bef659ea30571a36b94d6cabc633e39a355850d82fd3"
+          }
+        },
+        "iterations": 92,
+        "local_rank": 1,
+        "logical_arm": "candidate",
+        "mode": "measure",
+        "path": "two_rank",
+        "rank": 1,
+        "recorded_at": "2026-09-02T02:49:06.995632+00:00",
+        "runtime": {
+          "cann": "/usr/local/Ascend/cann-9.0.1",
+          "python": "3.12.13 (main, Jul  7 2026, 16:29:36) [GCC 11.4.0]",
+          "torch": "2.10.0+cpu",
+          "torch_npu": "2.10.0.post2",
+          "triton_cache": "<candidate-cache>/two-rank/rank1",
+          "visible_devices": "0,1"
+        },
+        "samples": [
+          {
+            "critical_path_elapsed_ns": 469609642,
+            "iterations": 92,
+            "last_output_sha256": "7e00efa74131c16849801b5f57aba386cf977d5c6c51712f12978afb9aab6858",
+            "local_elapsed_ns": 469609642,
+            "per_iteration_ns": 5104452.630434782,
+            "started_at": "2026-09-02T02:49:06.997874+00:00"
+          },
+          {
+            "critical_path_elapsed_ns": 465662779,
+            "iterations": 92,
+            "last_output_sha256": "7e00efa74131c16849801b5f57aba386cf977d5c6c51712f12978afb9aab6858",
+            "local_elapsed_ns": 465662779,
+            "per_iteration_ns": 5061551.945652174,
+            "started_at": "2026-09-02T02:49:07.472401+00:00"
+          },
+          {
+            "critical_path_elapsed_ns": 462742155,
+            "iterations": 92,
+            "last_output_sha256": "7e00efa74131c16849801b5f57aba386cf977d5c6c51712f12978afb9aab6858",
+            "local_elapsed_ns": 462742155,
+            "per_iteration_ns": 5029806.032608695,
+            "started_at": "2026-09-02T02:49:07.939538+00:00"
+          },
+          {
+            "critical_path_elapsed_ns": 465888141,
+            "iterations": 92,
+            "last_output_sha256": "7e00efa74131c16849801b5f57aba386cf977d5c6c51712f12978afb9aab6858",
+            "local_elapsed_ns": 465888141,
+            "per_iteration_ns": 5064001.532608695,
+            "started_at": "2026-09-02T02:49:08.403765+00:00"
+          },
+          {
+            "critical_path_elapsed_ns": 456864835,
+            "iterations": 92,
+            "last_output_sha256": "7e00efa74131c16849801b5f57aba386cf977d5c6c51712f12978afb9aab6858",
+            "local_elapsed_ns": 456864835,
+            "per_iteration_ns": 4965922.119565218,
+            "started_at": "2026-09-02T02:49:08.871154+00:00"
+          }
+        ],
+        "schema": "sfa-r016-two-rank-arm-v1",
+        "source": {
+          "context": {
+            "path": "run/source/candidate-archive/candidate-bundle/vllm-ascend/vllm_ascend/attention/context_parallel/sfa_cp.py",
+            "sha256": "015e2bd76fe5910736c32ae46ef8bfe08c5589f467560515112b58e28f125795"
+          },
+          "pack": {
+            "path": "run/source/candidate-archive/candidate-bundle/vllm-ascend/vllm_ascend/ops/triton/sfa_cp.py",
+            "sha256": "9124bea2df152af8e3114dd42b6ffebee9dfb0223c9e1839d3f280f6eacb8eb9"
+          },
+          "producer": {
+            "path": "run/source/candidate-archive/candidate-bundle/vllm-ascend/vllm_ascend/device/device_op.py",
+            "sha256": "c64dc4f693da5c537315fb66c9dd121b16be4ef9a7eaaae45390d1871760ba1d"
+          }
+        },
+        "status": "PASS_MEASUREMENT_BLOCK",
+        "warmup_iterations": 10
+      },
+      "sha256": "38a030d4b5c55823611c3a7486406e0af40dbcaf52665e03f2efb681a8157899"
+    }
+  ],
+  "samples": [
+    {
+      "critical_path_elapsed_ns": 469609642,
+      "iterations": 92,
+      "last_output_sha256": "83334fa8cb3211d8786b3eb3eb266ef784a9a28f2ee1f98245689ba932c19807",
+      "local_elapsed_ns": 469383830,
+      "per_iteration_ns": 5104452.630434782,
+      "started_at": "2026-09-02T02:49:06.997894+00:00"
+    },
+    {
+      "critical_path_elapsed_ns": 465662779,
+      "iterations": 92,
+      "last_output_sha256": "83334fa8cb3211d8786b3eb3eb266ef784a9a28f2ee1f98245689ba932c19807",
+      "local_elapsed_ns": 465405156,
+      "per_iteration_ns": 5061551.945652174,
+      "started_at": "2026-09-02T02:49:07.472444+00:00"
+    },
+    {
+      "critical_path_elapsed_ns": 462742155,
+      "iterations": 92,
+      "last_output_sha256": "83334fa8cb3211d8786b3eb3eb266ef784a9a28f2ee1f98245689ba932c19807",
+      "local_elapsed_ns": 462518443,
+      "per_iteration_ns": 5029806.032608695,
+      "started_at": "2026-09-02T02:49:07.939537+00:00"
+    },
+    {
+      "critical_path_elapsed_ns": 465888141,
+      "iterations": 92,
+      "last_output_sha256": "83334fa8cb3211d8786b3eb3eb266ef784a9a28f2ee1f98245689ba932c19807",
+      "local_elapsed_ns": 465713219,
+      "per_iteration_ns": 5064001.532608695,
+      "started_at": "2026-09-02T02:49:08.403728+00:00"
+    },
+    {
+      "critical_path_elapsed_ns": 456864835,
+      "iterations": 92,
+      "last_output_sha256": "83334fa8cb3211d8786b3eb3eb266ef784a9a28f2ee1f98245689ba932c19807",
+      "local_elapsed_ns": 456833974,
+      "per_iteration_ns": 4965922.119565218,
+      "started_at": "2026-09-02T02:49:08.871091+00:00"
+    }
+  ],
+  "schema": "sfa-r016-two-rank-aggregate-v1",
+  "selected_iterations": null,
+  "status": "PASS_MEASUREMENT_BLOCK"
+}

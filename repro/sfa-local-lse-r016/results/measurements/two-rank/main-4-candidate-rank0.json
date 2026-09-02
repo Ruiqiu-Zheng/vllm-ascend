@@ -1,0 +1,106 @@
+{
+  "arm": "candidate",
+  "block": 2,
+  "block_max_ns": 5654782.739130435,
+  "block_median_ns": 5610491.271739131,
+  "block_min_ns": 5139139.532608695,
+  "fixture_file": {
+    "bytes": 7514,
+    "path": "inputs/fixture.bin",
+    "sha256": "63785fa8f4592b7f8f9e06d345a20cf29a4ac8d19adc1e89dc8f90e60eb7db19"
+  },
+  "group": {
+    "backend": "hccl",
+    "name": "sfa-r016-hccl:0",
+    "rank": 0,
+    "world_size": 2
+  },
+  "imported_modules": {
+    "context": {
+      "path": "<candidate-env>/vllm_ascend/attention/context_parallel/sfa_cp.py",
+      "sha256": "015e2bd76fe5910736c32ae46ef8bfe08c5589f467560515112b58e28f125795"
+    },
+    "device_op": {
+      "path": "<candidate-env>/vllm_ascend/device/device_op.py",
+      "sha256": "c64dc4f693da5c537315fb66c9dd121b16be4ef9a7eaaae45390d1871760ba1d"
+    },
+    "vllm_ascend": {
+      "path": "<candidate-env>/vllm_ascend/__init__.py",
+      "sha256": "404b7f5dd6b999346b61bef659ea30571a36b94d6cabc633e39a355850d82fd3"
+    }
+  },
+  "iterations": 92,
+  "local_rank": 0,
+  "logical_arm": "candidate",
+  "mode": "measure",
+  "path": "two_rank",
+  "rank": 0,
+  "recorded_at": "2026-09-02T02:51:16.557278+00:00",
+  "runtime": {
+    "cann": "/usr/local/Ascend/cann-9.0.1",
+    "python": "3.12.13 (main, Jul  7 2026, 16:29:36) [GCC 11.4.0]",
+    "torch": "2.10.0+cpu",
+    "torch_npu": "2.10.0.post2",
+    "triton_cache": "<candidate-cache>/two-rank/rank0",
+    "visible_devices": "0,1"
+  },
+  "samples": [
+    {
+      "critical_path_elapsed_ns": 472800837,
+      "iterations": 92,
+      "last_output_sha256": "83334fa8cb3211d8786b3eb3eb266ef784a9a28f2ee1f98245689ba932c19807",
+      "local_elapsed_ns": 472604126,
+      "per_iteration_ns": 5139139.532608695,
+      "started_at": "2026-09-02T02:51:16.559478+00:00"
+    },
+    {
+      "critical_path_elapsed_ns": 517690021,
+      "iterations": 92,
+      "last_output_sha256": "83334fa8cb3211d8786b3eb3eb266ef784a9a28f2ee1f98245689ba932c19807",
+      "local_elapsed_ns": 517690021,
+      "per_iteration_ns": 5627065.445652174,
+      "started_at": "2026-09-02T02:51:17.037436+00:00"
+    },
+    {
+      "critical_path_elapsed_ns": 513506075,
+      "iterations": 92,
+      "last_output_sha256": "83334fa8cb3211d8786b3eb3eb266ef784a9a28f2ee1f98245689ba932c19807",
+      "local_elapsed_ns": 513506075,
+      "per_iteration_ns": 5581587.771739131,
+      "started_at": "2026-09-02T02:51:17.556967+00:00"
+    },
+    {
+      "critical_path_elapsed_ns": 516165197,
+      "iterations": 92,
+      "last_output_sha256": "83334fa8cb3211d8786b3eb3eb266ef784a9a28f2ee1f98245689ba932c19807",
+      "local_elapsed_ns": 515911645,
+      "per_iteration_ns": 5610491.271739131,
+      "started_at": "2026-09-02T02:51:18.072217+00:00"
+    },
+    {
+      "critical_path_elapsed_ns": 520240012,
+      "iterations": 92,
+      "last_output_sha256": "83334fa8cb3211d8786b3eb3eb266ef784a9a28f2ee1f98245689ba932c19807",
+      "local_elapsed_ns": 519926010,
+      "per_iteration_ns": 5654782.739130435,
+      "started_at": "2026-09-02T02:51:18.589917+00:00"
+    }
+  ],
+  "schema": "sfa-r016-two-rank-arm-v1",
+  "source": {
+    "context": {
+      "path": "run/source/candidate-archive/candidate-bundle/vllm-ascend/vllm_ascend/attention/context_parallel/sfa_cp.py",
+      "sha256": "015e2bd76fe5910736c32ae46ef8bfe08c5589f467560515112b58e28f125795"
+    },
+    "pack": {
+      "path": "run/source/candidate-archive/candidate-bundle/vllm-ascend/vllm_ascend/ops/triton/sfa_cp.py",
+      "sha256": "9124bea2df152af8e3114dd42b6ffebee9dfb0223c9e1839d3f280f6eacb8eb9"
+    },
+    "producer": {
+      "path": "run/source/candidate-archive/candidate-bundle/vllm-ascend/vllm_ascend/device/device_op.py",
+      "sha256": "c64dc4f693da5c537315fb66c9dd121b16be4ef9a7eaaae45390d1871760ba1d"
+    }
+  },
+  "status": "PASS_MEASUREMENT_BLOCK",
+  "warmup_iterations": 10
+}
