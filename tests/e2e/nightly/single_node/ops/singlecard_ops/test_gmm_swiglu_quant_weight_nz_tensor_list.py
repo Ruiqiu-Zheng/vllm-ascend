@@ -138,3 +138,86 @@ def test_gmm_swiglu_quant_weight_nz_tensor_list():
     gc.collect()
     torch.npu.empty_cache()
     torch.npu.reset_peak_memory_stats()
+
+
+@torch.inference_mode()
+def test_gmm_swiglu_quant_weight_nz_tensor_list_k1_split_workspace():
+    # Current non-prefill tiling rule:
+    #   m_limit = floor(256 MiB / (2 workspaces * sizeof(int32) * N))
+    #   tiling key 1 iff M > 2 * m_limit.
+    # N=4096 matches the existing tensor-list regression width, while K=128
+    # matches this kernel's BASIC_K tile and avoids adding an unrelated
+    # minimum-K / maximum-N edge to the synchronization regression.
+    m, k, expert_num, n = 16385, 128, 2, 4096
+    user_workspace_limit = 256 * 1024 * 1024
+    m_limit = (user_workspace_limit // 2 // 4) // n
+    assert m_limit == 8192
+    assert m == 2 * m_limit + 1
+
+    torch.manual_seed(27)
+    x = torch.randint(-32, 32, (m, k), dtype=torch.int8)
+    weight = torch.randint(-8, 8, (expert_num, k, n), dtype=torch.int8)
+    weight_scale = torch.rand(expert_num, n, dtype=torch.float32) * 0.009 + 0.001
+    x_scale = torch.rand(m, dtype=torch.float32) * 0.009 + 0.001
+    # Expert 0 is deliberately empty; all rows map to expert 1.
+    group_list = torch.tensor([0, m], dtype=torch.int64)
+
+    weight_nz_npu = [torch_npu.npu_format_cast(item.npu(), 29) for item in weight]
+    weight_scale_npu = [item.npu() for item in weight_scale]
+    x_npu = x.npu()
+    x_scale_npu = x_scale.npu()
+    group_list_npu = group_list.npu()
+
+    try:
+        output_1, output_scale_1, output_offset_1 = (
+            torch.ops._C_ascend.grouped_matmul_swiglu_quant_weight_nz_tensor_list(
+                x_npu, weight_nz_npu, weight_scale_npu, x_scale_npu, group_list_npu
+            )
+        )
+        torch.npu.synchronize()
+        output_1_cpu = output_1.cpu()
+        output_scale_1_cpu = output_scale_1.cpu()
+
+        output_2, output_scale_2, output_offset_2 = (
+            torch.ops._C_ascend.grouped_matmul_swiglu_quant_weight_nz_tensor_list(
+                x_npu, weight_nz_npu, weight_scale_npu, x_scale_npu, group_list_npu
+            )
+        )
+        torch.npu.synchronize()
+        output_2_cpu = output_2.cpu()
+        output_scale_2_cpu = output_scale_2.cpu()
+
+        # Full-buffer repeatability catches stale event/scalar state without
+        # materializing a full CPU golden matrix.
+        assert torch.equal(output_1_cpu, output_2_cpu)
+        assert torch.equal(output_scale_1_cpu, output_scale_2_cpu)
+
+        # Check every workspace split boundary and the final one-row tail.
+        checked_rows = torch.tensor([0, m_limit - 1, m_limit, 2 * m_limit - 1, 2 * m_limit])
+        output_cpu, output_scale_cpu = gmm_swiglu_quant(
+            x[checked_rows],
+            weight[1],
+            weight_scale[1],
+            x_scale[checked_rows],
+            checked_rows.numel(),
+        )
+        torch.testing.assert_close(output_1_cpu[checked_rows], output_cpu, atol=1, rtol=2**-13)
+        torch.testing.assert_close(output_scale_1_cpu[checked_rows], output_scale_cpu, atol=1e-9, rtol=1e-6)
+
+        assert output_1.shape == (m, n // 2)
+        assert output_1.dtype == torch.int8
+        assert output_1.is_contiguous()
+        assert output_scale_1.shape == (m,)
+        assert output_scale_1.dtype == torch.float32
+        assert output_scale_1.is_contiguous()
+        # output_offset is currently an ABI placeholder allocated by the
+        # torch adapter; the ACLNN path warns that its values are unsupported.
+        # Validate only shape/dtype, not uninitialized contents.
+        assert output_offset_1.shape == (m,)
+        assert output_offset_1.dtype == torch.float32
+        assert output_offset_2.shape == (m,)
+        assert output_offset_2.dtype == torch.float32
+    finally:
+        gc.collect()
+        torch.npu.empty_cache()
+        torch.npu.reset_peak_memory_stats()
