@@ -62,7 +62,7 @@ the indexer needs a full-sequence view to select the same sparse top-k blocks
 as non-DCP SFA, while the much larger SFA KV cache should remain sharded to
 retain DCP's memory benefit:
 
-- The LightningIndexer cache is replicated on every DCP rank, so index
+- By default, the LightningIndexer cache is replicated on every DCP rank, so index
   selection uses the complete sequence.
 - The SFA KV cache remains DCP-local. Global indices from the replicated
   indexer view are remapped to local KV indices before SFA runs.
@@ -91,6 +91,12 @@ vllm serve <glm-5.2-model> \
 
 The replicated indexer increases indexer-cache memory in proportion to the
 DCP world size; the SFA KV cache itself remains sharded.
+
+A source-preparation-only, default-off `enable_sfa_dcp_sharded_indexer` candidate
+exists for the bound GLM-5.2 DCP16/B128/K2048 decode path up to a 256K global visible length. It publishes aligned
+rank-local BF16 scores and int32 logical indices, performs an exact deterministic
+global TopK merge, and fails closed for unsupported modes. It has no live NPU
+correctness or performance claim.
 
 ### SFA DSA-CP `o_proj` Path
 

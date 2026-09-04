@@ -2,10 +2,12 @@
 
 from dataclasses import fields
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+import pytest
 import torch
 
+from vllm_ascend.attention.context_parallel import sfa_dcp_indexer
 from vllm_ascend.attention.context_parallel.common_cp import DCPMetadataBuilderMixin
 from vllm_ascend.attention.context_parallel.sfa_cp import (
     AscendSFADCPImpl,
@@ -18,8 +20,17 @@ from vllm_ascend.attention.context_parallel.sfa_cp import (
     AscendSFADSADCPMetadata,
     AscendSFADSADCPMetadataBuilder,
     AscendSFAPCPImpl,
+    DCPContext,
     resolve_sfa_impl,
     resolve_sfa_metadata_builder,
+)
+from vllm_ascend.attention.context_parallel.sfa_dcp_indexer import (
+    DCP_SHARDED_INDEXER_TOPK,
+    DCP_SHARDED_INDEXER_WORLD_SIZE,
+    dcp_local_to_global_index,
+    dcp_local_visible_counts,
+    merge_dcp_global_topk,
+    publish_dcp_local_candidates,
 )
 from vllm_ascend.attention.sfa_v1 import (
     AscendSFAImpl,
@@ -246,7 +257,11 @@ def test_sfa_dcp_builder_sizes_replicated_view_from_padded_block_table() -> None
         model_config=SimpleNamespace(max_model_len=1024),
     )
 
-    with patch.object(DCPMetadataBuilderMixin, "__init__", new=fake_base_init):
+    ascend_config = SimpleNamespace(enable_sfa_dcp_sharded_indexer=False)
+    with (
+        patch.object(DCPMetadataBuilderMixin, "__init__", new=fake_base_init),
+        patch("vllm_ascend.attention.context_parallel.sfa_cp.get_ascend_config", return_value=ascend_config),
+    ):
         builder = AscendSFADCPMetadataBuilder(
             kv_cache_spec,
             [],
@@ -320,4 +335,278 @@ def test_sfa_dcp_updates_dsa_cp_local_slot_mapping_with_padding() -> None:
     torch.testing.assert_close(
         dsa_cp_context.slot_mapping_cp,
         torch.tensor([12, 13, -1], dtype=torch.int32),
+    )
+
+
+def _build_dcp_publications(
+    visible_length: int,
+    score_by_global_index: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    k = DCP_SHARDED_INDEXER_TOPK
+    gathered_indices = []
+    gathered_scores = []
+    visible = torch.tensor([[visible_length]], dtype=torch.int64)
+    for rank in range(DCP_SHARDED_INDEXER_WORLD_SIZE):
+        producer_rank = torch.tensor(rank, dtype=torch.int64)
+        local_visible = int(dcp_local_visible_counts(visible, producer_rank)[0, 0])
+        local_indices = torch.full((1, 1, k), -1, dtype=torch.int32)
+        local_scores = torch.full((1, 1, k), float("-inf"), dtype=torch.bfloat16)
+        if local_visible:
+            all_local_indices = torch.arange(local_visible, dtype=torch.int64)
+            all_global_indices = torch.tensor(
+                [dcp_local_to_global_index(int(local_idx), rank) for local_idx in all_local_indices],
+                dtype=torch.int64,
+            )
+            all_local_scores = score_by_global_index[all_global_indices]
+            local_order = torch.argsort(all_local_scores, descending=True, stable=True)[:k]
+            candidate_count = local_order.numel()
+            local_indices[0, 0, :candidate_count] = all_local_indices[local_order].to(torch.int32)
+            local_scores[0, 0, :candidate_count] = all_local_scores[local_order]
+        local_indices, local_scores = publish_dcp_local_candidates(
+            local_indices,
+            local_scores,
+            torch.tensor([[local_visible]], dtype=torch.int32),
+            visible,
+            producer_rank,
+        )
+        gathered_indices.append(local_indices)
+        gathered_scores.append(local_scores)
+    return torch.stack(gathered_indices), torch.stack(gathered_scores)
+
+
+def test_dcp_sharded_indexer_merge_uses_exact_stable_order() -> None:
+    visible_length = 2050
+    scores = torch.ones(visible_length, dtype=torch.bfloat16)
+    gathered_indices, gathered_scores = _build_dcp_publications(visible_length, scores)
+
+    merged_indices, merged_scores = merge_dcp_global_topk(
+        gathered_indices,
+        gathered_scores,
+        torch.tensor([[visible_length]], dtype=torch.int32),
+    )
+
+    torch.testing.assert_close(
+        merged_indices[0, 0],
+        torch.arange(DCP_SHARDED_INDEXER_TOPK, dtype=torch.int32),
+    )
+    torch.testing.assert_close(merged_scores[0, 0], torch.ones_like(merged_scores[0, 0]))
+
+
+def test_dcp_sharded_indexer_merge_handles_empty_owners_and_fewer_than_k() -> None:
+    scores = torch.tensor([float("inf"), -0.0, 0.0], dtype=torch.bfloat16)
+    gathered_indices, gathered_scores = _build_dcp_publications(3, scores)
+
+    merged_indices, merged_scores = merge_dcp_global_topk(
+        gathered_indices,
+        gathered_scores,
+        torch.tensor([[3]], dtype=torch.int32),
+    )
+
+    torch.testing.assert_close(merged_indices[0, 0, :3], torch.tensor([0, 1, 2], dtype=torch.int32))
+    assert torch.all(merged_indices[0, 0, 3:] == -1)
+    assert torch.all(torch.isneginf(merged_scores[0, 0, 3:].float()))
+    for rank in range(1, DCP_SHARDED_INDEXER_WORLD_SIZE):
+        assert torch.all(gathered_indices[rank] == -1)
+
+
+def test_dcp_sharded_indexer_merge_resolves_bf16_collisions_by_global_index() -> None:
+    visible_length = 2050
+    scores = torch.arange(visible_length, 0, -1, dtype=torch.float32).to(torch.bfloat16)
+    # Force a collision across the K-1/K/K+1 cutoff.
+    scores[2046:2050] = torch.tensor(1.0, dtype=torch.bfloat16)
+    gathered_indices, gathered_scores = _build_dcp_publications(visible_length, scores)
+
+    merged_indices, _ = merge_dcp_global_topk(
+        gathered_indices,
+        gathered_scores,
+        torch.tensor([[visible_length]], dtype=torch.int32),
+    )
+    expected = sorted(range(visible_length), key=lambda index: (-float(scores[index]), index))[:2048]
+    torch.testing.assert_close(merged_indices[0, 0], torch.tensor(expected, dtype=torch.int32))
+
+
+def test_dcp_sharded_indexer_merge_keeps_high_local_indices_above_k() -> None:
+    visible_length = 36_864
+    scores = torch.arange(visible_length, dtype=torch.float32).to(torch.bfloat16)
+    gathered_indices, gathered_scores = _build_dcp_publications(visible_length, scores)
+
+    merged_indices, merged_scores = merge_dcp_global_topk(
+        gathered_indices,
+        gathered_scores,
+        torch.tensor([[visible_length]], dtype=torch.int32),
+    )
+
+    expected = sorted(range(visible_length), key=lambda index: (-float(scores[index]), index))[:2048]
+    expected_indices = torch.tensor(expected, dtype=torch.int32)
+    expected_scores = scores.index_select(0, expected_indices.to(torch.int64))
+    torch.testing.assert_close(merged_indices[0, 0], expected_indices)
+    assert torch.equal(
+        merged_scores[0, 0].contiguous().view(torch.int16),
+        expected_scores.contiguous().view(torch.int16),
+    )
+    assert any(
+        int(local_index) >= DCP_SHARDED_INDEXER_TOPK
+        for rank in range(DCP_SHARDED_INDEXER_WORLD_SIZE)
+        for local_index in (
+            torch.div(
+                gathered_indices[rank, 0, 0].to(torch.int64),
+                DCP_SHARDED_INDEXER_WORLD_SIZE * 128,
+                rounding_mode="floor",
+            )
+            * 128
+            + torch.remainder(gathered_indices[rank, 0, 0].to(torch.int64), 128)
+        )
+        if int(local_index) >= 0
+    )
+
+
+def test_dcp_sharded_indexer_publication_fails_closed_on_duplicate_local_index() -> None:
+    k = DCP_SHARDED_INDEXER_TOPK
+    local_indices = torch.full((1, 1, k), -1, dtype=torch.int32)
+    local_indices[0, 0, :2] = 0
+    local_scores = torch.full((1, 1, k), float("-inf"), dtype=torch.bfloat16)
+    local_scores[0, 0, :2] = 1
+
+    with pytest.raises(ValueError, match="exactly once"):
+        publish_dcp_local_candidates(
+            local_indices,
+            local_scores,
+            torch.tensor([[2]], dtype=torch.int32),
+            torch.tensor([[2]], dtype=torch.int32),
+            producer_rank=torch.tensor(0, dtype=torch.int64),
+        )
+
+
+def test_dcp_sharded_indexer_assertion_is_suppressed_only_during_npu_capture() -> None:
+    condition = SimpleNamespace(device=SimpleNamespace(type="npu"))
+    with (
+        patch.object(torch.npu, "is_current_stream_capturing", return_value=True),
+        patch.object(torch, "_assert_async") as assert_async,
+    ):
+        sfa_dcp_indexer._assert_tensor(condition, "capture")
+
+    assert_async.assert_not_called()
+
+
+def test_dcp_sharded_indexer_assertion_is_retained_for_eager_npu() -> None:
+    condition = SimpleNamespace(device=SimpleNamespace(type="npu"))
+    with (
+        patch.object(torch.npu, "is_current_stream_capturing", return_value=False),
+        patch.object(torch, "_assert_async") as assert_async,
+    ):
+        sfa_dcp_indexer._assert_tensor(condition, "eager")
+
+    assert_async.assert_called_once_with(condition, "eager")
+
+
+def test_dcp_sharded_indexer_keeps_fixed_native_rows_and_masks_empty_owners() -> None:
+    num_rows = 3
+    k = DCP_SHARDED_INDEXER_TOPK
+    local_indices = torch.full((num_rows, 1, k), -1, dtype=torch.int32)
+    local_scores = torch.full((num_rows, 1, k), float("-inf"), dtype=torch.bfloat16)
+    local_indices[0, 0, :2] = torch.tensor([0, 1], dtype=torch.int32)
+    local_scores[0, 0, :2] = torch.tensor([3.0, 2.0], dtype=torch.bfloat16)
+    # Deliberately invalid native values: the zero-owner row must be masked
+    # before publication validation and candidate exchange.
+    local_indices[1, 0, 0] = 17
+    local_scores[1, 0, 0] = float("nan")
+    local_indices[2, 0, 0] = 0
+    local_scores[2, 0, 0] = 4.0
+
+    def gather_rank_zero(tensor: torch.Tensor, dim: int) -> torch.Tensor:
+        sentinel = -1 if tensor.dtype == torch.int32 else float("-inf")
+        publications = torch.full(
+            (DCP_SHARDED_INDEXER_WORLD_SIZE, *tensor.shape),
+            sentinel,
+            dtype=tensor.dtype,
+        )
+        publications[0].copy_(tensor)
+        return publications.flatten(0, 1)
+
+    impl = AscendSFADCPImpl.__new__(AscendSFADCPImpl)
+    impl.enable_sfa_dcp_sharded_indexer = True
+    impl.dcp_size = DCP_SHARDED_INDEXER_WORLD_SIZE
+    impl.dcp_rank = 0
+    impl._dcp_producer_rank = torch.tensor(0, dtype=torch.int64)
+    impl.dcp_group = SimpleNamespace(all_gather=gather_rank_zero)
+    metadata = AscendSFADCPMetadata.__new__(AscendSFADCPMetadata)
+    metadata.num_prefills = 0
+    metadata.block_table = torch.tensor(
+        [
+            [3, 4],
+            [5, 6],
+            [7, 8],
+        ],
+        dtype=torch.int32,
+    )
+    metadata.dcp_context = DCPContext(
+        slot_mapping=torch.full((num_rows,), -1, dtype=torch.int32),
+        block_table=metadata.block_table,
+        seq_lens=torch.tensor([2, 0, 1], dtype=torch.int32),
+        global_seq_lens=torch.tensor([2, 0, 1], dtype=torch.int32),
+        seq_lens_cpu=torch.tensor([2, 0, 1], dtype=torch.int32),
+    )
+    query_lens = torch.tensor([1, 2, 3], dtype=torch.int32)
+
+    with patch.object(
+        AscendSFAImpl,
+        "indexer_select_post_process",
+        MagicMock(return_value=(local_indices, local_scores)),
+    ) as native_call:
+        indices = impl.indexer_select_post_process(
+            torch.zeros(num_rows, 4, dtype=torch.bfloat16),
+            torch.zeros(num_rows),
+            (),
+            metadata,
+            torch.zeros(num_rows),
+            torch.zeros(num_rows),
+            query_lens,
+            metadata.dcp_context.seq_lens,
+        )
+
+    native_call.assert_called_once()
+    native_args = native_call.call_args.args
+    native_kwargs = native_call.call_args.kwargs
+    assert native_args[0].shape[0] == num_rows
+    torch.testing.assert_close(native_args[6], query_lens)
+    torch.testing.assert_close(native_args[7], torch.tensor([2, 1, 1], dtype=torch.int32))
+    torch.testing.assert_close(
+        native_kwargs["block_table"],
+        torch.tensor(
+            [
+                [3, 4],
+                [0, 0],
+                [7, 8],
+            ],
+            dtype=torch.int32,
+        ),
+    )
+    assert "selected_rows" not in native_kwargs
+    assert native_kwargs["return_selected_scores"] is True
+    assert native_kwargs["sparse_mode"] == 0
+
+    assert indices.shape == (num_rows, 1, k)
+    torch.testing.assert_close(indices[0, 0, :2], torch.tensor([0, 1], dtype=torch.int32))
+    assert torch.all(indices[1] == -1)
+    assert indices[2, 0, 0] == 0
+    assert torch.all(indices[2, 0, 1:] == -1)
+
+
+def test_dcp_sharded_indexer_remaps_global_indices_without_mapping_sentinel() -> None:
+    impl = AscendSFADCPImpl.__new__(AscendSFADCPImpl)
+    impl.enable_sfa_dcp_sharded_indexer = True
+    impl.dcp_size = DCP_SHARDED_INDEXER_WORLD_SIZE
+    impl.dcp_rank = 10
+    impl._dcp_interleave_size = 128
+    impl._dcp_index_topk = 6
+    global_indices = torch.tensor(
+        [[[1280, 1407, 3328, -1, 0, 9599]]],
+        dtype=torch.int32,
+    )
+
+    local_indices = impl._remap_sparse_indices(global_indices)
+
+    torch.testing.assert_close(
+        local_indices,
+        torch.tensor([[[0, 127, 128, 639, -1, -1]]], dtype=torch.int32),
     )

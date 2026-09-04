@@ -12,11 +12,22 @@ from vllm.utils.math_utils import cdiv
 from vllm.v1.kv_cache_interface import AttentionSpec
 
 import vllm_ascend.ops.triton.sfa_cp  # noqa: F401
+from vllm_ascend.ascend_config import get_ascend_config
 from vllm_ascend.attention.attention_v1 import AscendAttentionState
 from vllm_ascend.attention.context_parallel.common_cp import (
     DCPImplMixin,
     DCPMetadataBuilderMixin,
     get_dcp_local_seq_lens,
+)
+from vllm_ascend.attention.context_parallel.sfa_dcp_indexer import (
+    DCP_SHARDED_INDEXER_INTERLEAVE_SIZE,
+    DCP_SHARDED_INDEXER_TOPK,
+    DCP_SHARDED_INDEXER_WORLD_SIZE,
+    mask_dcp_inactive_local_candidates,
+    merge_dcp_global_topk,
+    prepare_dcp_fixed_row_indexer_inputs,
+    publish_dcp_local_candidates,
+    validate_dcp_sharded_indexer_replay_lengths,
 )
 from vllm_ascend.attention.sfa_v1 import (
     AscendSFAImpl,
@@ -130,6 +141,8 @@ class DCPContext:
     slot_mapping: torch.Tensor
     block_table: torch.Tensor
     seq_lens: torch.Tensor
+    global_seq_lens: torch.Tensor
+    seq_lens_cpu: torch.Tensor | None = None
     kv_gather_block_ids: torch.Tensor | None = None
     kv_gather_block_table: torch.Tensor | None = None
     gather_context: DCPGatherContext | None = None
@@ -598,6 +611,7 @@ class AscendSFADCPMetadataBuilder(
             metadata_cls,
             supports_dcp_with_varlen,
         )
+        self.enable_sfa_dcp_sharded_indexer = get_ascend_config().enable_sfa_dcp_sharded_indexer is True
         self.cp_kv_cache_interleave_size = vllm_config.parallel_config.cp_kv_cache_interleave_size
         assert self.dcp_size > 1, "AscendSFADCPMetadataBuilder requires DCP world size > 1."
         if self.cp_kv_cache_interleave_size <= 0:
@@ -786,17 +800,21 @@ class AscendSFADCPMetadataBuilder(
         num_reqs = common_attn_metadata.num_reqs
         num_input_tokens = common_attn_metadata.num_input_tokens
         dcp_block_table = self._get_dcp_local_block_table(full_dcp_block_table, num_reqs)
-        block_table_replicated_view = self._build_block_table_replicated_view(
-            dcp_block_table,
-            common_attn_metadata.seq_lens,
-        )
-        slot_mapping_replicated_view = self._build_slot_mapping_replicated_view(
-            common_attn_metadata,
-            block_table_replicated_view,
-        )
+        if self.enable_sfa_dcp_sharded_indexer:
+            metadata_slot_mapping = dcp_slot_mapping
+            metadata_block_table = dcp_block_table
+        else:
+            metadata_block_table = self._build_block_table_replicated_view(
+                dcp_block_table,
+                common_attn_metadata.seq_lens,
+            )
+            metadata_slot_mapping = self._build_slot_mapping_replicated_view(
+                common_attn_metadata,
+                metadata_block_table,
+            )
 
-        common_attn_metadata.slot_mapping = slot_mapping_replicated_view
-        common_attn_metadata.block_table_tensor = block_table_replicated_view
+        common_attn_metadata.slot_mapping = metadata_slot_mapping
+        common_attn_metadata.block_table_tensor = metadata_block_table
         try:
             metadata = build_metadata()
         finally:
@@ -804,6 +822,16 @@ class AscendSFADCPMetadataBuilder(
             common_attn_metadata.block_table_tensor = full_dcp_block_table
 
         assert isinstance(metadata, AscendSFADCPMetadata)
+        global_seq_lens = metadata.seq_lens
+        local_seq_lens_cpu = None
+        if self.enable_sfa_dcp_sharded_indexer:
+            if metadata.seq_lens_cpu is None:
+                raise RuntimeError("DCP sharded-indexer graph replay requires CPU sequence lengths.")
+            global_seq_lens_cpu = torch.as_tensor(metadata.seq_lens_cpu, device="cpu")[:num_reqs]
+            validate_dcp_sharded_indexer_replay_lengths(global_seq_lens_cpu)
+            global_seq_lens_cpu = global_seq_lens_cpu.to(dtype=torch.int32)
+            local_seq_lens_cpu = self._get_dcp_local_seq_lens(global_seq_lens_cpu)
+
         dcp_local_seq_lens = common_attn_metadata.dcp_local_seq_lens
         if dcp_local_seq_lens is None:
             dcp_local_seq_lens = self._get_dcp_local_seq_lens(metadata.seq_lens)
@@ -814,12 +842,16 @@ class AscendSFADCPMetadataBuilder(
         )
         self.dcp_local_seq_lens_buf[:num_reqs].copy_(local_seq_lens_src, non_blocking=True)
         local_seq_lens = self.dcp_local_seq_lens_buf[:num_reqs]
+        if self.enable_sfa_dcp_sharded_indexer:
+            metadata.seq_lens = local_seq_lens
 
         num_decodes, num_prefills, num_decode_tokens, _ = split_decodes_and_prefills(
             common_attn_metadata,
             decode_threshold=self.decode_threshold,
             treat_short_extends_as_decodes=False,
         )
+        if self.enable_sfa_dcp_sharded_indexer and num_prefills > 0:
+            raise NotImplementedError("The bound DCP sharded-indexer candidate supports decode-only batches.")
         kv_gather_block_ids = None
         kv_gather_block_table = None
         if num_prefills > 0:
@@ -828,6 +860,8 @@ class AscendSFADCPMetadataBuilder(
             slot_mapping=dcp_slot_mapping[:num_input_tokens],
             block_table=dcp_block_table,
             seq_lens=local_seq_lens,
+            global_seq_lens=global_seq_lens,
+            seq_lens_cpu=local_seq_lens_cpu,
             kv_gather_block_ids=kv_gather_block_ids,
             kv_gather_block_table=kv_gather_block_table,
         )
@@ -907,13 +941,147 @@ class AscendSFADCPImpl(DCPImplMixin, AscendSFAImpl):
                 break
         if self._dcp_index_topk <= 0:
             raise RuntimeError("index_topk must be set in the model config for DCP SFA.")
+        self.enable_sfa_dcp_sharded_indexer = get_ascend_config().enable_sfa_dcp_sharded_indexer is True
+        if self.enable_sfa_dcp_sharded_indexer:
+            if self.dcp_size != DCP_SHARDED_INDEXER_WORLD_SIZE:
+                raise ValueError(f"enable_sfa_dcp_sharded_indexer is bound to DCP16, got dcp_size={self.dcp_size}.")
+            if self._dcp_interleave_size != DCP_SHARDED_INDEXER_INTERLEAVE_SIZE:
+                raise ValueError(
+                    f"enable_sfa_dcp_sharded_indexer is bound to interleave size 128, got {self._dcp_interleave_size}."
+                )
+            if self._dcp_index_topk != DCP_SHARDED_INDEXER_TOPK:
+                raise ValueError(
+                    f"enable_sfa_dcp_sharded_indexer is bound to K=2048, got index_topk={self._dcp_index_topk}."
+                )
+            if self.enable_sparse_li_c8:
+                raise ValueError("enable_sfa_dcp_sharded_indexer does not support the LI C8 cache.")
+            if not self.use_torch_npu_lightning_indexer:
+                raise ValueError(
+                    "enable_sfa_dcp_sharded_indexer requires the score-capable "
+                    "torch_npu.npu_lightning_indexer primitive."
+                )
+            if get_ascend_config().enable_dsa_cp:
+                raise ValueError("enable_sfa_dcp_sharded_indexer does not support DSA-CP.")
+            if self.vllm_config.speculative_config is not None:
+                raise ValueError("enable_sfa_dcp_sharded_indexer does not support speculative decoding.")
+            if self.vllm_config.kv_transfer_config is not None:
+                raise ValueError("enable_sfa_dcp_sharded_indexer does not support KV transfer.")
         device = self.q_proj.weight.device
+        self._dcp_producer_rank: torch.Tensor | None = None
+        if self.enable_sfa_dcp_sharded_indexer:
+            # Materialize the rank exactly once on the target NPU while the
+            # implementation is constructed, before native ACL graph capture.
+            # The captured publication path reuses this device-static tensor.
+            self._dcp_producer_rank = torch.tensor(
+                self.dcp_rank,
+                dtype=torch.int64,
+                device=device,
+            )
         self._remap_order = torch.arange(self._dcp_index_topk, dtype=torch.float32, device=device)
         self._remap_invalid_index = torch.tensor(-1.0, dtype=torch.float32, device=device)
 
     @staticmethod
     def _has_prefill(attn_metadata: M) -> bool:
         return attn_metadata.num_prefills > 0
+
+    def indexer_select_post_process(
+        self,
+        x: torch.Tensor,
+        q_c: torch.Tensor | tuple[torch.Tensor, torch.Tensor],
+        kv_cache: tuple[torch.Tensor, ...],
+        attn_metadata: M,
+        cos: torch.Tensor,
+        sin: torch.Tensor,
+        actual_seq_lengths_query: torch.Tensor,
+        actual_seq_lengths_key: torch.Tensor,
+        **kwargs,
+    ) -> torch.Tensor:
+        if not self.enable_sfa_dcp_sharded_indexer:
+            return super().indexer_select_post_process(
+                x,
+                q_c,
+                kv_cache,
+                attn_metadata,
+                cos,
+                sin,
+                actual_seq_lengths_query,
+                actual_seq_lengths_key,
+                **kwargs,
+            )
+
+        if self._has_prefill(attn_metadata):
+            raise NotImplementedError("The bound DCP sharded-indexer candidate supports decode-only batches.")
+        if getattr(attn_metadata, "dsa_cp_context", None) is not None:
+            raise NotImplementedError("The bound DCP sharded-indexer candidate does not support DSA-CP.")
+        if x.dtype != torch.bfloat16:
+            raise ValueError(f"The bound DCP sharded-indexer candidate requires BF16 query data, got {x.dtype}.")
+        assert isinstance(attn_metadata, AscendSFADCPMetadata)
+        assert attn_metadata.dcp_context is not None
+        dcp_context = attn_metadata.dcp_context
+        assert dcp_context.seq_lens_cpu is not None
+        num_rows = dcp_context.global_seq_lens.shape[0]
+        if x.shape[0] != num_rows or attn_metadata.block_table.shape[0] != num_rows:
+            raise RuntimeError(
+                "The bound DCP sharded-indexer candidate requires exactly one decode query row per request, "
+                f"got x={tuple(x.shape)}, block_table={tuple(attn_metadata.block_table.shape)}, and rows={num_rows}."
+            )
+        producer_rank = self._dcp_producer_rank
+        if producer_rank is None:
+            raise RuntimeError("The DCP sharded indexer producer-rank tensor was not initialized.")
+
+        # ACL Graph records this Python method once. Keep the native LI row
+        # geometry fixed for the graph specialization and represent zero-owner
+        # rows with a safe block-0/key-length-1 input. Device-side masking below
+        # restores the authoritative empty publication before candidate exchange.
+        active_rows, safe_key_lens, safe_block_table = prepare_dcp_fixed_row_indexer_inputs(
+            dcp_context.seq_lens,
+            attn_metadata.block_table,
+        )
+        native_result = super().indexer_select_post_process(
+            x,
+            q_c,
+            kv_cache,
+            attn_metadata,
+            cos,
+            sin,
+            actual_seq_lengths_query,
+            safe_key_lens,
+            block_table=safe_block_table,
+            return_selected_scores=True,
+            sparse_mode=0,
+        )
+        assert isinstance(native_result, tuple)
+        local_indices, local_scores = native_result
+        local_indices, local_scores = mask_dcp_inactive_local_candidates(
+            local_indices,
+            local_scores,
+            active_rows,
+        )
+        published_indices, published_scores = publish_dcp_local_candidates(
+            local_indices,
+            local_scores,
+            dcp_context.seq_lens.view(num_rows, 1),
+            dcp_context.global_seq_lens.view(num_rows, 1),
+            producer_rank,
+        )
+        candidate_shape = (num_rows, 1, DCP_SHARDED_INDEXER_TOPK)
+
+        gathered_indices = self.dcp_group.all_gather(published_indices.contiguous(), dim=0)
+        gathered_scores = self.dcp_group.all_gather(published_scores.contiguous(), dim=0)
+        expected_gathered_rows = self.dcp_size * num_rows
+        if gathered_indices.shape[0] != expected_gathered_rows or gathered_scores.shape[0] != expected_gathered_rows:
+            raise RuntimeError(
+                "DCP candidate all-gather returned an unexpected leading dimension, "
+                f"got {tuple(gathered_indices.shape)} and {tuple(gathered_scores.shape)}."
+            )
+        gathered_indices = gathered_indices.view(self.dcp_size, *candidate_shape)
+        gathered_scores = gathered_scores.view(self.dcp_size, *candidate_shape)
+        global_indices, _ = merge_dcp_global_topk(
+            gathered_indices,
+            gathered_scores,
+            dcp_context.global_seq_lens.view(num_rows, 1),
+        )
+        return global_indices
 
     def _record_dcp_kv_gather_context(
         self,
@@ -1006,6 +1174,41 @@ class AscendSFADCPImpl(DCPImplMixin, AscendSFAImpl):
             )
         if topk_indices.numel() == 0:
             return topk_indices
+
+        if self.enable_sfa_dcp_sharded_indexer:
+            # The retained contract requires signed int64 mapping and forbids
+            # applying mapping arithmetic to the -1 sentinel.
+            global_indices = topk_indices.to(torch.int64)
+            valid_mask = global_indices >= 0
+            safe_global_indices = torch.where(valid_mask, global_indices, 0)
+            global_blocks = torch.div(
+                safe_global_indices,
+                self._dcp_interleave_size,
+                rounding_mode="floor",
+            )
+            local_owner_mask = valid_mask & (torch.remainder(global_blocks, self.dcp_size) == self.dcp_rank)
+            local_offsets = torch.remainder(
+                safe_global_indices,
+                self._dcp_interleave_size,
+            )
+            local_indices = (
+                torch.div(
+                    safe_global_indices,
+                    self.dcp_size * self._dcp_interleave_size,
+                    rounding_mode="floor",
+                )
+                * self._dcp_interleave_size
+                + local_offsets
+            )
+            remapped_indices = torch.where(local_owner_mask, local_indices, -1)
+            original_order = torch.arange(
+                topk_count,
+                dtype=torch.int64,
+                device=topk_indices.device,
+            )
+            pack_keys = original_order + (~local_owner_mask).to(torch.int64) * topk_count
+            pack_order = torch.argsort(pack_keys, dim=-1, stable=True)
+            return torch.gather(remapped_indices, dim=-1, index=pack_order).to(topk_indices.dtype)
 
         if HAS_TRITON and topk_indices.is_npu:
             from vllm_ascend.ops.triton.sparse_index_remap import remap_sparse_indices_triton

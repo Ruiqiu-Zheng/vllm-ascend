@@ -392,6 +392,9 @@ class AscendConfig:
     enable_mc2_hierarchy_comm: bool = False  # deprecated, will be replaced by mc2_comm_alg = "hierarchy"
     enable_reduce_sample: bool = False
     enable_dsa_cp: bool = False
+    # Experimental source-only DCP16 candidate. The replicated-indexer path
+    # remains authoritative unless this switch is explicitly enabled.
+    enable_sfa_dcp_sharded_indexer: bool = False
     enable_force_eplb: bool = False
     draft_window_size: int | None = None
     mix_placement: bool = False

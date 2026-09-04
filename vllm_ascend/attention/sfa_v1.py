@@ -1171,7 +1171,10 @@ class AscendSFAImpl(MLAAttentionImpl):
         actual_seq_lengths_query: torch.Tensor,
         actual_seq_lengths_key: torch.Tensor,
         *,
+        selected_rows: torch.Tensor | None = None,
+        block_table: torch.Tensor | None = None,
         return_selected_scores: bool = False,
+        sparse_mode: int = 3,
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         if not self.has_indexer:
             raise RuntimeError(
@@ -1232,6 +1235,20 @@ class AscendSFAImpl(MLAAttentionImpl):
             q_li, q_li_scale = torch_npu.npu_dynamic_quant(q_li.view(-1, self.head_dim), dst_type=self.c8_k_cache_dtype)
             q_li_scale = q_li_scale.to(self.c8_k_scale_cache_dtype)  # [b*s,]
 
+        if selected_rows is not None:
+            if self.enable_sparse_li_c8:
+                raise NotImplementedError("Selected-row LightningIndexer publication does not support LI C8.")
+            q_li = torch.index_select(q_li, 0, selected_rows)
+            weights = torch.index_select(weights, 0, selected_rows)
+
+        publication_kwargs: dict[str, Any] = {}
+        if return_selected_scores or sparse_mode != 3 or block_table is not None:
+            publication_kwargs = {
+                "return_selected_scores": return_selected_scores,
+                "sparse_mode": sparse_mode,
+                "block_table": block_table,
+            }
+
         return DeviceOperator.indexer_select_post_process(
             self,
             q_li,
@@ -1244,7 +1261,7 @@ class AscendSFAImpl(MLAAttentionImpl):
             actual_seq_lengths_key,
             self.enable_sparse_li_c8,
             self.use_torch_npu_lightning_indexer,
-            return_selected_scores=return_selected_scores,
+            **publication_kwargs,
         )
 
     def _get_indexcache_topk_indices(self, num_tokens: int) -> torch.Tensor:
