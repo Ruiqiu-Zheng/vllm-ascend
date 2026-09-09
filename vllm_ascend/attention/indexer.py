@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import scipy  # type: ignore
@@ -76,6 +76,42 @@ class AscendSFAIndexerMetadata:
     num_decode_tokens: int = 0
 
 
+def compose_indexer_cache_metadata(
+    indexer_metadata: Any, sfa_metadata: Any, indexer_cache: tuple[torch.Tensor, ...]
+) -> Any:
+    """Use SFA's retained replicated DCP addresses for the independent cache.
+
+    Common metadata has already been restored to the local SFA KV layout
+    when the independent builder runs. SFA retains the replicated view,
+    including DSA-CP's TP-padded slots. Borrow only those addresses, leaving
+    query ownership and per-forward sequence lengths to the existing path.
+    """
+    if getattr(sfa_metadata, "dcp_context", None) is None:
+        return indexer_metadata
+    if indexer_metadata.block_size <= 0 or indexer_metadata.block_size != sfa_metadata.block_size:
+        raise RuntimeError("Replicated DCP indexer handoff requires matching kernel block sizes.")
+    # Native selection receives these physical tensors directly. A split
+    # block table cannot be handed to a cache with a different block stride.
+    if not indexer_cache or any(cache.shape[1] != sfa_metadata.block_size for cache in indexer_cache):
+        raise RuntimeError("Replicated DCP indexer handoff requires matching physical and kernel block sizes.")
+    if sfa_metadata.block_table.ndim != 2 or sfa_metadata.slot_mapping.ndim != 1:
+        raise RuntimeError("Replicated DCP indexer handoff requires a block table and flat slots.")
+    dsa_context = getattr(sfa_metadata, "dsa_cp_context", None)
+    if dsa_context is not None and sfa_metadata.slot_mapping.numel() != dsa_context.num_tokens_pad:
+        raise RuntimeError("Replicated DCP indexer slots must cover the TP-padded gathered keys.")
+    # Do not mutate shared target metadata or the SFA fallback used by draft
+    # layers. Local-slot C8 groups are invalid for these replicated addresses;
+    # DCP uses the normal k/scale scatter path instead.
+    return replace(
+        indexer_metadata,
+        block_table=sfa_metadata.block_table,
+        slot_mapping=sfa_metadata.slot_mapping,
+        group_len=None,
+        group_key_idx=None,
+        group_key_cache_idx=None,
+    )
+
+
 class AscendSFAIndexerBackend(nn.Module, AttentionBackend):
     """Backend and impl for split SFA indexer cache layers - one class per
     indexer family, two interfaces:
@@ -91,8 +127,8 @@ class AscendSFAIndexerBackend(nn.Module, AttentionBackend):
     KV-cache planner can assign an independent physical tensor while sharing
     block ids with the main MLA cache group. Its builder constructs the
     metadata the indexer forward consumes (paged cache view, rope tables,
-    LI C8 reshape-optim fields); SFA only injects the parallel-layout values
-    (sequence lengths, decode count) onto that metadata per forward.
+    LI C8 reshape-optim fields). At the SFA boundary it composes the retained
+    replicated DCP addresses with parallel-layout values (lengths, decode count).
 
     Do not reuse AscendSFAMetadataBuilder here. It inherits vLLM's
     MLACommonMetadataBuilder, whose initializer assumes layer_names[0] points to
@@ -181,6 +217,7 @@ class AscendSFAIndexerBackend(nn.Module, AttentionBackend):
         # k across the TP group. Both are no-ops in the base layout.
         parallel_config = get_current_vllm_config().parallel_config
         self._pcp_active = parallel_config.prefill_context_parallel_size > 1
+        self._dcp_active = parallel_config.decode_context_parallel_size > 1
         self._dsa_cp_active = enable_dsa_cp()
 
     def process_weights_after_loading(self) -> None:
@@ -254,7 +291,7 @@ class AscendSFAIndexerBackend(nn.Module, AttentionBackend):
 
     def _use_c8_reshape_optim(self) -> bool:
         """Whether this indexer can use the LI C8 cache-write operator."""
-        return self.enable_sparse_li_c8 and get_ascend_config().c8_reshape_optim_enabled
+        return self.enable_sparse_li_c8 and not self._dcp_active and get_ascend_config().c8_reshape_optim_enabled
 
     def forward_k(
         self,
@@ -473,6 +510,7 @@ class AscendSFAIndexerMetadataBuilder(AttentionMetadataBuilder[AscendSFAIndexerM
         # Match the logical block size selected for BlockTable.
         self.kernel_block_size = select_common_block_size(kv_cache_spec.block_size, [AscendSFAIndexerBackend])
         self._pcp_active = vllm_config.parallel_config.prefill_context_parallel_size > 1
+        self._dcp_active = vllm_config.parallel_config.decode_context_parallel_size > 1
 
     @classmethod
     def get_cudagraph_support(
@@ -503,7 +541,9 @@ class AscendSFAIndexerMetadataBuilder(AttentionMetadataBuilder[AscendSFAIndexerM
 
         cos, sin = get_cos_and_sin_mla(input_positions, use_cache=True)
 
-        if get_ascend_config().c8_reshape_optim_enabled:
+        # DCP addresses are composed at the SFA boundary. Do not generate
+        # reshape groups from the restored common/local slot mapping.
+        if get_ascend_config().c8_reshape_optim_enabled and not self._dcp_active:
             torch.ops._C_ascend.store_kv_block_metadata(
                 slot_mapping,
                 common_attn_metadata.group_len,
@@ -521,7 +561,7 @@ class AscendSFAIndexerMetadataBuilder(AttentionMetadataBuilder[AscendSFAIndexerM
             sin=sin[:num_input_tokens],
             cos=cos[:num_input_tokens],
             block_size=block_size,
-            group_len=common_attn_metadata.group_len,
-            group_key_idx=common_attn_metadata.group_key_idx,
-            group_key_cache_idx=common_attn_metadata.group_key_cache_idx,
+            group_len=None if self._dcp_active else common_attn_metadata.group_len,
+            group_key_idx=None if self._dcp_active else common_attn_metadata.group_key_idx,
+            group_key_cache_idx=None if self._dcp_active else common_attn_metadata.group_key_cache_idx,
         )
