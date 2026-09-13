@@ -17,6 +17,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
+from types import MethodType
 from typing import Any
 
 import torch
@@ -381,14 +382,21 @@ class AscendAttentionMetadataBuilder(AttentionMetadataBuilder[AscendMetadata]):
                 dim=0,
             )
 
-        backend_metadata = self._build_backend_metadata(
-            common_attn_metadata,
-            block_table=block_table,
-            query_lens=query_start_loc_cpu[1:] - query_start_loc_cpu[:-1],
-            seq_lens=seq_lens,
-            num_decodes=num_decodes,
-            num_prefills=num_prefills,
-        )
+        build_backend_metadata = self._build_backend_metadata
+        if (
+            isinstance(build_backend_metadata, MethodType)
+            and build_backend_metadata.__func__ is _ORIGINAL_BUILD_BACKEND_METADATA
+        ):
+            backend_metadata = {}
+        else:
+            backend_metadata = build_backend_metadata(
+                common_attn_metadata,
+                block_table=block_table,
+                query_lens=query_start_loc_cpu[1:] - query_start_loc_cpu[:-1],
+                seq_lens=seq_lens,
+                num_decodes=num_decodes,
+                num_prefills=num_prefills,
+            )
         attn_metadata = self.metadata_cls(
             num_actual_tokens=num_actual_tokens,
             num_decode_tokens=num_decode_tokens,
@@ -457,6 +465,9 @@ class AscendAttentionMetadataBuilder(AttentionMetadataBuilder[AscendMetadata]):
 
         attn_metadata.attn_state = attn_state
         return attn_metadata
+
+
+_ORIGINAL_BUILD_BACKEND_METADATA = AscendAttentionMetadataBuilder._build_backend_metadata
 
 
 class AscendAttentionBackendImpl(AttentionImpl):
