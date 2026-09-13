@@ -384,7 +384,7 @@ class AscendAttentionMetadataBuilder(AttentionMetadataBuilder[AscendMetadata]):
 
         build_backend_metadata = self._build_backend_metadata
         if (
-            isinstance(build_backend_metadata, MethodType)
+            type(build_backend_metadata) is MethodType
             and build_backend_metadata.__func__ is _ORIGINAL_BUILD_BACKEND_METADATA
         ):
             backend_metadata = {}

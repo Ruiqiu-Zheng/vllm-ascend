@@ -16,6 +16,14 @@ from vllm_ascend.attention.utils import (
     split_decodes_and_prefills,
 )
 
+_ORIGINAL_BACKEND_KWARGS = {
+    "block_table",
+    "query_lens",
+    "seq_lens",
+    "num_decodes",
+    "num_prefills",
+}
+
 
 class _CapturedMetadata(SimpleNamespace):
     def __init__(self, **kwargs):
@@ -70,6 +78,8 @@ def _common_metadata(
         backing = torch.empty(len(query_start_values) * 2, dtype=qstart_dtype)
         backing[::2] = query_start
         query_start = backing[::2]
+        assert query_start.stride(0) == 2
+        assert not query_start.is_contiguous()
     num_reqs = len(lengths)
     num_actual_tokens = int(query_start[-1].item())
     if seq_lens is None:
@@ -78,7 +88,7 @@ def _common_metadata(
         block_table_rows = num_reqs
     return AscendCommonAttentionMetadata(
         query_start_loc=query_start.clone(),
-        query_start_loc_cpu=query_start.clone(),
+        query_start_loc_cpu=query_start,
         seq_lens=torch.tensor(seq_lens, dtype=torch.int64),
         _seq_lens_cpu=torch.tensor(seq_lens, dtype=torch.int64),
         seq_lens_cpu=None,
@@ -135,29 +145,36 @@ def _phase_tuple(metadata):
 
 
 def test_base_original_noop_elides_hook_call_and_target_subtraction():
-    builder = _builder()
-    common_attn_metadata = _common_metadata([1, 1, 3, 7], qstart_dtype=torch.int32, strided_qstart=True)
-    expected_counts = _expected_phase_counts(builder, common_attn_metadata)
-    splitter_subtractions = _subtraction_count(lambda: _expected_phase_counts(builder, common_attn_metadata))
-    calls = 0
+    for qstart_dtype in (torch.int32, torch.int64):
+        builder = _builder()
+        common_attn_metadata = _common_metadata([1, 1, 3, 7], qstart_dtype=qstart_dtype, strided_qstart=True)
+        assert not common_attn_metadata.query_start_loc_cpu.is_contiguous()
+        expected_counts = _expected_phase_counts(builder, common_attn_metadata)
+        splitter_subtractions = _subtraction_count(
+            lambda builder=builder, common_attn_metadata=common_attn_metadata: _expected_phase_counts(
+                builder, common_attn_metadata
+            )
+        )
+        calls = 0
 
-    def profiler(frame, event, arg):
-        nonlocal calls
-        if event == "call" and frame.f_code is attn_module._ORIGINAL_BUILD_BACKEND_METADATA.__code__:
-            calls += 1
-        return profiler
+        def profiler(frame, event, arg):
+            nonlocal calls
+            if event == "call" and frame.f_code is attn_module._ORIGINAL_BUILD_BACKEND_METADATA.__code__:
+                calls += 1
+            return profiler
 
-    old_profiler = sys.getprofile()
-    sys.setprofile(profiler)
-    try:
-        build_subtractions, metadata = _subtractions_during(lambda: _build(builder, common_attn_metadata))
-    finally:
-        sys.setprofile(old_profiler)
+        old_profiler = sys.getprofile()
+        sys.setprofile(profiler)
+        try:
+            build_subtractions, metadata = _subtractions_during(
+                lambda builder=builder, common_attn_metadata=common_attn_metadata: _build(builder, common_attn_metadata)
+            )
+        finally:
+            sys.setprofile(old_profiler)
 
-    assert calls == 0
-    assert not common_attn_metadata.query_start_loc_cpu.is_contiguous()
-    assert build_subtractions == splitter_subtractions
-    assert _phase_tuple(metadata) == expected_counts
+        assert calls == 0
+        assert build_subtractions == splitter_subtractions
+        assert _phase_tuple(metadata) == expected_counts
 
 
 def test_inherited_original_noop_is_elided_for_empty_and_single_request_cases():
@@ -167,9 +184,27 @@ def test_inherited_original_noop_is_elided_for_empty_and_single_request_cases():
     for lengths in ([], [1], [5]):
         builder = _builder(InheritedBuilder)
         common_attn_metadata = _common_metadata(lengths)
-        metadata = _build(builder, common_attn_metadata)
         expected_counts = _expected_phase_counts(builder, common_attn_metadata)
+        splitter_subtractions = _subtraction_count(
+            lambda builder=builder, common_attn_metadata=common_attn_metadata: _expected_phase_counts(
+                builder, common_attn_metadata
+            )
+        )
+        build_subtractions, metadata = _subtractions_during(
+            lambda builder=builder, common_attn_metadata=common_attn_metadata: _build(builder, common_attn_metadata)
+        )
+        assert build_subtractions == splitter_subtractions
         assert _phase_tuple(metadata) == expected_counts
+
+
+def test_zero_length_request_has_explicit_phase_counts():
+    builder = _builder()
+    common_attn_metadata = _common_metadata([0, 3])
+
+    metadata = _build(builder, common_attn_metadata)
+
+    assert _phase_tuple(metadata) == (1, 1, 0, 3)
+    assert metadata.actual_seq_lengths_q == [0, 3]
 
 
 def test_subclass_override_receives_original_keywords_once():
@@ -242,23 +277,30 @@ def test_instance_methodtype_callback_and_plain_callable_fall_back_once():
         if replacement == "method":
             builder._build_backend_metadata = MethodType(callback, builder)
         else:
-            builder._build_backend_metadata = type(
-                "CallableBackendMetadata",
-                (),
-                {
-                    "__call__": (
-                        lambda self, common_attn_metadata, _calls=calls, **kwargs: _calls.append(kwargs["query_lens"])
-                        or {}
+
+            class CallableBackendMetadata:
+                def __call__(self, common_attn_metadata, _calls=calls, **kwargs):
+                    _calls.append(
+                        {
+                            "common": common_attn_metadata,
+                            "kwargs": kwargs,
+                        }
                     )
-                },
-            )()
+                    return {"backend_payload": kwargs["query_lens"]}
+
+            builder._build_backend_metadata = CallableBackendMetadata()
 
         metadata = _build(builder, common_attn_metadata)
 
         assert len(calls) == 1
-        assert torch.equal(calls[0], torch.tensor([3], dtype=torch.int32))
         if replacement == "method":
-            assert metadata.backend_payload is calls[0]
+            query_lens = calls[0]
+        else:
+            assert calls[0]["common"] is common_attn_metadata
+            assert set(calls[0]["kwargs"]) == _ORIGINAL_BACKEND_KWARGS
+            query_lens = calls[0]["kwargs"]["query_lens"]
+        assert torch.equal(query_lens, torch.tensor([3], dtype=torch.int32))
+        assert metadata.backend_payload is query_lens
 
 
 def test_class_replacement_after_builder_use_is_not_mistaken_for_original():
@@ -293,6 +335,12 @@ def test_class_replacement_after_builder_use_is_not_mistaken_for_original():
     assert torch.equal(calls[0][1], torch.tensor([1, 4]))
     assert metadata.backend_payload is calls[0][1]
 
+    splitter_subtractions = _subtraction_count(lambda: _expected_phase_counts(builder, common_attn_metadata))
+    restored_subtractions, restored_metadata = _subtractions_during(lambda: _build(builder, common_attn_metadata))
+    assert restored_subtractions == splitter_subtractions
+    assert not hasattr(restored_metadata, "backend_payload")
+    assert len(calls) == 1
+
 
 def test_callable_with_spoofed_func_attribute_falls_back_once():
     builder = _builder()
@@ -300,18 +348,63 @@ def test_callable_with_spoofed_func_attribute_falls_back_once():
     calls = []
 
     class SpoofedCallable:
-        __func__ = attn_module._ORIGINAL_BUILD_BACKEND_METADATA
-
         def __call__(self, common_attn_metadata, **kwargs):
-            calls.append(kwargs["query_lens"])
+            calls.append(
+                {
+                    "common": common_attn_metadata,
+                    "kwargs": kwargs,
+                }
+            )
             return {"backend_payload": kwargs["query_lens"]}
 
-    builder._build_backend_metadata = SpoofedCallable()
+    spoofed_callable = SpoofedCallable()
+    spoofed_callable.__func__ = attn_module._ORIGINAL_BUILD_BACKEND_METADATA
+    assert spoofed_callable.__func__ is attn_module._ORIGINAL_BUILD_BACKEND_METADATA
+    builder._build_backend_metadata = spoofed_callable
     metadata = _build(builder, common_attn_metadata)
 
     assert len(calls) == 1
-    assert torch.equal(calls[0], torch.tensor([2], dtype=torch.int32))
-    assert metadata.backend_payload is calls[0]
+    assert calls[0]["common"] is common_attn_metadata
+    assert set(calls[0]["kwargs"]) == _ORIGINAL_BACKEND_KWARGS
+    assert torch.equal(calls[0]["kwargs"]["query_lens"], torch.tensor([2], dtype=torch.int32))
+    assert metadata.backend_payload is calls[0]["kwargs"]["query_lens"]
+
+
+def test_methodtype_proxy_with_original_func_identity_falls_back_once():
+    builder = _builder()
+    common_attn_metadata = _common_metadata([2], qstart_dtype=torch.int32)
+    calls = []
+
+    class MethodTypeProxy:
+        @property
+        def __class__(self):
+            return MethodType
+
+        def __init__(self):
+            self.__func__ = attn_module._ORIGINAL_BUILD_BACKEND_METADATA
+
+        def __call__(self, common_attn_metadata, **kwargs):
+            calls.append(
+                {
+                    "common": common_attn_metadata,
+                    "kwargs": kwargs,
+                }
+            )
+            return {"backend_payload": kwargs["query_lens"]}
+
+    proxy = MethodTypeProxy()
+    assert isinstance(proxy, MethodType)
+    assert type(proxy) is not MethodType
+    assert proxy.__func__ is attn_module._ORIGINAL_BUILD_BACKEND_METADATA
+    builder._build_backend_metadata = proxy
+
+    metadata = _build(builder, common_attn_metadata)
+
+    assert len(calls) == 1
+    assert calls[0]["common"] is common_attn_metadata
+    assert set(calls[0]["kwargs"]) == _ORIGINAL_BACKEND_KWARGS
+    assert torch.equal(calls[0]["kwargs"]["query_lens"], torch.tensor([2], dtype=torch.int32))
+    assert metadata.backend_payload is calls[0]["kwargs"]["query_lens"]
 
 
 def test_padding_forwards_prepared_tensors_and_keeps_inputs_unchanged():
@@ -340,6 +433,7 @@ def test_padding_forwards_prepared_tensors_and_keeps_inputs_unchanged():
 
     metadata = _build(builder, common_attn_metadata)
 
+    assert len(calls) == 1
     block_table, query_lens, seq_lens = calls[0]
     assert torch.equal(query_lens, torch.tensor([1, 1, 3]))
     assert block_table.shape == (3, 2)
@@ -355,7 +449,7 @@ def test_padding_forwards_prepared_tensors_and_keeps_inputs_unchanged():
     assert torch.equal(common_attn_metadata.slot_mapping, original_slot_mapping)
 
 
-def test_original_noop_branch_uses_literal_backend_metadata_dict():
+def test_original_noop_branch_uses_literal_backend_metadata_dict_source_evidence():
     source = inspect.getsource(AscendAttentionMetadataBuilder.build)
 
     assert "backend_metadata = {}" in source
